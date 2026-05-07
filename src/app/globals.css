@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+
+:root {
+    --font-display: var(--font-syne);
+    --font-mono: var(--font-space-mono);
+    --font-body: var(--font-dm-sans);
+}
+
+body {
+    font-family: var(--font-body), sans-serif;
+}
+
+@keyframes ticker {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
+.animate-ticker {
+    animation: ticker 25s linear infinite;
+}
+
+
+* {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
+}
