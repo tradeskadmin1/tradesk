@@ -11,82 +11,206 @@ import TopOpportunities from "../components/opportunities"
 import SpreadDistribution from "../components/distribution"
 import RecentActivity from "../components/activity"
 import LiveAlerts from "../components/alerts"
+import TradeModal from "../components/trade-modal"
 
-export default function Home() {
-    const router = useRouter()
-    const [userName, setUserName] = useState<string>("")
+interface DashboardMetrics {
+  opportunities:  number
+  activeTrades:   number
+  totalBalanceUsd: string
+  kycStatus:      string
+}
 
-    useEffect(() => {
-        const onboarding = localStorage.getItem("tradesk_onboarding")
-        if (!onboarding) {
-            router.replace("/onboarding")
-        }
-    }, [router])
+export default function DashboardPage() {
+  const router = useRouter()
 
-    useEffect(() => {
-        const loadUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-            const { data } = await supabase
-                .from("users")
-                .select("name")
-                .eq("id", user.id)
-                .single()
-            if (data?.name) setUserName(data.name.split(" ")[0])
-        }
-        loadUser()
-    }, [])
+  const [userName,    setUserName]    = useState("")
+  const [showTrade,   setShowTrade]   = useState(false)
+  const [loading,     setLoading]     = useState(true)
+  const [metrics,     setMetrics]     = useState<DashboardMetrics>({
+    opportunities:   0,
+    activeTrades:    0,
+    totalBalanceUsd: "0.00",
+    kycStatus:       "none",
+  })
 
-    const getGreeting = () => {
-        const hour = new Date().getHours()
-        if (hour < 12) return "Good Morning"
-        if (hour < 17) return "Good Afternoon"
-        if (hour < 21) return "Good Evening"
-        return "Hey, Night Owl"
+  // ── Auth + data load ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.replace("/auth")
+        return
+      }
+
+      // Check onboarded flag
+      const { data: userData } = await supabase
+        .from("users")
+        .select("full_name, onboarded, kyc_status")
+        .eq("id", user.id)
+        .single()
+
+      if (!userData?.onboarded) {
+        router.replace("/onboarding")
+        return
+      }
+
+      if (userData?.full_name) {
+        setUserName(userData.full_name.split(" ")[0])
+      }
+
+      // Fetch metrics in parallel
+      const [oppsRes, historyRes, balancesRes] = await Promise.allSettled([
+        fetch("/api/arbitrage/opportunities?limit=1"),
+        fetch("/api/trade/history?status=pending&limit=1"),
+        fetch("/api/balances"),
+      ])
+
+      let opportunities  = 0
+      let activeTrades   = 0
+      let totalBalanceUsd = "0.00"
+
+      if (oppsRes.status === "fulfilled" && oppsRes.value.ok) {
+        const d = await oppsRes.value.json()
+        opportunities = d.total ?? 0
+      }
+
+      if (historyRes.status === "fulfilled" && historyRes.value.ok) {
+        const d = await historyRes.value.json()
+        activeTrades = d.total ?? 0
+      }
+
+      if (balancesRes.status === "fulfilled" && balancesRes.value.ok) {
+        // Balances are token amounts — we show the raw count for now
+        const d = await balancesRes.value.json()
+        const allBalances: Array<{ balance: string }> = Object.values(d.balances ?? {}).flat() as any
+        const nonZero = allBalances.filter((b) => parseFloat(b.balance) > 0).length
+        totalBalanceUsd = nonZero > 0 ? `${nonZero} asset${nonZero !== 1 ? "s" : ""}` : "0"
+      }
+
+      setMetrics({
+        opportunities,
+        activeTrades,
+        totalBalanceUsd,
+        kycStatus: userData?.kyc_status ?? "none",
+      })
+
+      setLoading(false)
     }
 
-    return (
-        <div className="bg-[#1a1410] mt-8">
-            <Topbar />
-            <div className="flex">
-                <Sidebar />
-                <div className="flex-1 p-5 space-y-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                            <h1 className="text-lg sm:text-xl text-white">
-                                Dashboard
-                            </h1>
-                            <p className="text-xs sm:text-sm text-[#7a6a5a]">
-                                {getGreeting()}{userName ? `, ${userName}` : ""}, 14 opportunities detected
-                            </p>
-                        </div>
-                        <button className="bg-[#FF5733] text-white cursor-pointer px-3 py-2 sm:px-4 sm:py-2 rounded text-xs sm:text-sm w-full sm:w-auto">
-                            + New Trade
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <MetricCard label="Today's P&L" value="+$842" change="+3.2%" positive />
-                        <MetricCard label="Active Trades" value="7" change="3 pending" />
-                        <MetricCard label="Best Spread" value="2.84%" change="BTC" />
-                        <MetricCard label="Win Rate" value="91%" change="30 days" />
-                    </div>
-                    <div className="bg-[#201710] border border-[#2e2520] p-4 rounded-lg">
-                        <div className="mb-3 text-sm text-[#c8b8a8]">Portfolio Value</div>
-                        <Chart />
-                    </div>
+    init()
+  }, [router])
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <div className="lg:col-span-2 space-y-4">
-                            <TopOpportunities />
-                            <SpreadDistribution />
-                        </div>
-                        <div className="space-y-4">
-                            <RecentActivity />
-                            <LiveAlerts />
-                        </div>
-                    </div>
-                </div>
-            </div>
+  const getGreeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return "Good Morning"
+    if (h < 17) return "Good Afternoon"
+    if (h < 21) return "Good Evening"
+    return "Hey, Night Owl"
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d0a07] flex items-center justify-center">
+        <div className="flex gap-1.5">
+          {[0,1,2].map((i) => (
+            <span key={i} className="w-2 h-2 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
         </div>
+      </div>
     )
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0d0a07]">
+      <Topbar />
+
+      <div className="flex">
+        <Sidebar />
+
+        <div className="flex-1 p-5 space-y-5 overflow-auto">
+
+          {/* KYC banner */}
+          {metrics.kycStatus === "none" && (
+            <div
+              onClick={() => router.push("/kyc")}
+              className="flex items-center gap-3 bg-[#1e1208] border border-[#FF5733]/20 rounded-xl px-4 py-3 cursor-pointer hover:border-[#FF5733]/40 transition-all"
+            >
+              <span className="text-lg">🪪</span>
+              <div className="flex-1">
+                <span className="font-mono text-[12px] text-white">Complete Identity Verification</span>
+                <span className="font-mono text-[11px] text-[#7a6a5a] block">Unlock full trading limits — takes ~2 min</span>
+              </div>
+              <span className="font-mono text-[11px] text-[#FF5733]">Verify →</span>
+            </div>
+          )}
+
+          {/* Heading */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-lg sm:text-xl font-mono text-white">Dashboard</h1>
+              <p className="text-xs sm:text-sm text-[#7a6a5a] font-mono">
+                {getGreeting()}{userName ? `, ${userName}` : ""}
+                {metrics.opportunities > 0
+                  ? ` · ${metrics.opportunities} live opportunit${metrics.opportunities === 1 ? "y" : "ies"}`
+                  : ""}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowTrade(true)}
+              className="bg-[#FF5733] hover:bg-[#ff6a4d] text-white cursor-pointer px-4 py-2 rounded-xl font-mono text-sm font-bold transition-all hover:-translate-y-0.5 w-full sm:w-auto"
+            >
+              + New Trade
+            </button>
+          </div>
+
+          {/* Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <MetricCard
+              label="Total Balance"
+              value={metrics.totalBalanceUsd}
+              change="Across all chains"
+            />
+            <MetricCard
+              label="Live Opportunities"
+              value={String(metrics.opportunities)}
+              change="Scan for more"
+              positive={metrics.opportunities > 0}
+            />
+            <MetricCard
+              label="Active Trades"
+              value={String(metrics.activeTrades)}
+              change="Pending settlement"
+            />
+            <MetricCard
+              label="KYC Status"
+              value={metrics.kycStatus === "approved" ? "Verified" : metrics.kycStatus === "pending" ? "Under Review" : "Not Submitted"}
+              change={metrics.kycStatus === "none" ? "Click to verify →" : ""}
+              positive={metrics.kycStatus === "approved"}
+            />
+          </div>
+
+          {/* Chart */}
+          <div className="bg-[#201710] border border-[#2e2520] p-4 rounded-lg">
+            <div className="mb-3 text-sm text-[#c8b8a8] font-mono">Portfolio Value</div>
+            <Chart />
+          </div>
+
+          {/* Lower grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
+              <TopOpportunities />
+              <SpreadDistribution />
+            </div>
+            <div className="space-y-4">
+              <RecentActivity />
+              <LiveAlerts />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showTrade && <TradeModal onClose={() => setShowTrade(false)} />}
+    </div>
+  )
 }

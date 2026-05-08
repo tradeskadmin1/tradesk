@@ -43,13 +43,6 @@ function ConnectModal({
             {
                 onSuccess: async (data) => {
                     const address = data.accounts[0]
-                    const { data: { user } } = await supabase.auth.getUser()
-                    if (user) {
-                        await supabase
-                            .from("users")
-                            .update({ wallet_address: address })
-                            .eq("id", user.id)
-                    }
                     onConnected(address)
                     onClose()
                 },
@@ -200,12 +193,11 @@ export default function Topbar() {
             }
             const { data: userData } = await supabase
                 .from("users")
-                .select("wallet_address, name")
+                .select("full_name")
                 .eq("id", user.id)
                 .single()
 
-            if (userData?.wallet_address) setAddress(userData.wallet_address)
-            if (userData?.name) setUserName(userData.name)
+            if (userData?.full_name) setUserName(userData.full_name)
             setLoading(false)
         }
         loadUser()
@@ -218,15 +210,8 @@ export default function Topbar() {
         }
     }, [wagmiAddress])
 
-    const handleDisconnect = async () => {
+    const handleDisconnect = () => {
         disconnect()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            await supabase
-                .from("users")
-                .update({ wallet_address: null })
-                .eq("id", user.id)
-        }
         setAddress(null)
         setShowDisconnect(false)
     }

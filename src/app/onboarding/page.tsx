@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Chain = "ethereum" | "arbitrum"
+type Chain = "ethereum" | "bsc" | "arbitrum"
 type TradingStyle = "spot" | "arbitrage" | "both"
 type RiskLevel = "conservative" | "moderate" | "aggressive"
 type Token = "USDT" | "USDC" | "DAI" | "WBTC" | "ETH"
@@ -34,7 +34,8 @@ const COUNTRIES = [
 
 const CHAINS: { id: Chain; name: string; color: string; symbol: string }[] = [
     { id: "ethereum", name: "Ethereum", color: "#627eea", symbol: "ETH" },
-    { id: "arbitrum", name: "Arbitrum", color: "#28a0f0", symbol: "ARB" },
+    { id: "bsc", name: "BNB Chain", color: "#F0B90B", symbol: "BNB" },
+    { id: "arbitrum", name: "Arbitrum One", color: "#28a0f0", symbol: "ARB" },
 ]
 
 const TOKENS: { symbol: Token; name: string; icon: string }[] = [
@@ -535,12 +536,13 @@ export default function OnboardingPage() {
     const router = useRouter()
     const [step, setStep] = useState(1)
     const [saving, setSaving] = useState(false)
+    const [savingMsg, setSavingMsg] = useState("Setting up your trading desk...")
     const [data, setData] = useState<OnboardingData>({
         name: "",
         email: "",
         country: "",
         agreedToTerms: false,
-        chains: ["ethereum"],
+        chains: ["ethereum", "bsc", "arbitrum"],
         tradingStyle: null,
         riskLevel: null,
         depositChain: null,
@@ -581,23 +583,35 @@ export default function OnboardingPage() {
 
     const finish = async () => {
         setSaving(true)
-        const { data: { user } } = await supabase.auth.getUser()
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
 
-        if (user) {
+
+            setSavingMsg("Saving your profile...")
             await supabase.from("users").upsert({
                 id: user.id,
                 email: data.email || user.email,
-                name: data.name,
-                country: data.country,
-                chains: data.chains,
-                trading_style: data.tradingStyle,
-                risk_level: data.riskLevel,
+                full_name: data.name,
                 onboarded: true,
             })
-        }
 
-        setSaving(false)
-        router.push("/dashboard")
+
+            setSavingMsg("Creating your wallets on ETH, BSC & Arbitrum...")
+            const res = await fetch("/api/wallets/create", { method: "POST" })
+            if (!res.ok) {
+                const err = await res.json()
+                console.error("[onboarding] Wallet creation failed:", err)
+            }
+
+            setSavingMsg("Almost there...")
+            router.push("/dashboard")
+        } catch (err) {
+            console.error("[onboarding] finish error:", err)
+            router.push("/dashboard")
+        } finally {
+            setSaving(false)
+        }
     }
 
     const Header = () => (
@@ -646,7 +660,7 @@ export default function OnboardingPage() {
                                 <span key={i} className="w-2 h-2 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                             ))}
                         </div>
-                        <span className="font-mono text-[13px] text-[#c8b8a8]">Setting up your trading desk...</span>
+                        <span className="font-mono text-[13px] text-[#c8b8a8]">{savingMsg}</span>
                     </div>
                 </div>
             )}
