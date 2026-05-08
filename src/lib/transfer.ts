@@ -1,20 +1,24 @@
-import { createWalletClient, createPublicClient, http, fallback, erc20Abi, parseUnits, formatUnits, encodeFunctionData, } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { mainnet, bsc, arbitrum } from 'viem/chains'
-import { loadPrivateKey } from './wallet'
+import { createPublicClient, http, erc20Abi, parseUnits, formatUnits, encodeFunctionData } from 'viem'
 import { getPublicClient } from './rpc'
-import { fetchNativeBalance, fetchERC20Balance } from './balance'
 import { createSupabaseAdminClient } from './supabase-server'
+import { getPlatformWalletClient } from './platform-wallet'
+import { debitBalance, creditBalance, getBalance } from './ledger'
 import { TOKENS, NATIVE_TOKEN_ADDRESS } from '@/config/tokens'
 import { getChainConfig, type SupportedChainId } from '@/config/chains'
 
-const CHAIN_MAP = { 1: mainnet, 56: bsc, 42161: arbitrum } as const
+// Native address used in the ledger (matches what the webhook credits)
+const LEDGER_NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function toLedgerAddress(tokenAddress: string): string {
+    return tokenAddress === NATIVE_TOKEN_ADDRESS ? LEDGER_NATIVE_ADDRESS : tokenAddress.toLowerCase()
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface WithdrawalRequest {
     userId: string
-    walletId: string
+    walletId: string   // custodial_wallets.id
+    withdrawalId: string   // withdrawals.id — used to mark completed/failed
     chainId: SupportedChainId
     tokenSymbol: string
     amount: string
@@ -70,7 +74,7 @@ export async function estimateWithdrawalFee(
 
 
 export async function executeWithdrawal(req: WithdrawalRequest): Promise<TransferResult> {
-    const { userId, chainId, tokenSymbol, amount, toAddress } = req
+    const { userId, withdrawalId, chainId, tokenSymbol, amount, toAddress } = req
     const supabase = createSupabaseAdminClient() as any
     const token = TOKENS[tokenSymbol]
 
@@ -78,75 +82,85 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
 
     const tokenAddress = token.addresses[chainId]
     if (!tokenAddress) throw new Error(`[transfer] ${tokenSymbol} not available on chain ${chainId}`)
-    let privateKey: string
-    try {
-        privateKey = await loadPrivateKey(userId, chainId)
-    } catch (err) {
-        throw new Error(`[transfer] Could not load private key: ${err}`)
+
+    const ledgerAddr = toLedgerAddress(tokenAddress)
+
+    // ── 1. Check ledger balance ────────────────────────────────────────────
+    const ledgerBalance = await getBalance({ userId, chainId, tokenAddress: ledgerAddr })
+    if (parseFloat(ledgerBalance) < parseFloat(amount)) {
+        throw new Error(`[transfer] Insufficient ledger balance. Have ${ledgerBalance}, need ${amount}`)
     }
 
-    const account = privateKeyToAccount(privateKey as `0x${string}`)
-    const chain = CHAIN_MAP[chainId]
+    // ── 2. Debit ledger atomically (throws if balance races below zero) ────
+    await debitBalance({
+        userId,
+        chainId,
+        tokenSymbol,
+        tokenAddress: ledgerAddr,
+        amount,
+        type: 'withdrawal',
+        refId: withdrawalId,
+        note: `Withdrawal to ${toAddress}`,
+    })
+
+    // ── 3. Broadcast from hot wallet ───────────────────────────────────────
+    const {
+        walletClient: hotWallet,
+        publicClient,
+    } = await getPlatformWalletClient(chainId)
+
     const amountRaw = parseUnits(amount, token.decimals)
-    let currentBalance: bigint
-
-    if (tokenAddress === NATIVE_TOKEN_ADDRESS) {
-        currentBalance = await fetchNativeBalance(account.address, chainId)
-    } else {
-        currentBalance = await fetchERC20Balance(
-            tokenAddress as `0x${string}`,
-            account.address,
-            chainId,
-        )
-    }
-
-    if (currentBalance < amountRaw) {
-        throw new Error(
-            `[transfer] Insufficient balance. Have ${formatUnits(currentBalance, token.decimals)}, need ${amount}`,
-        )
-    }
-
-    const chainConfig = getChainConfig(chainId)
-    const walletClient = createWalletClient({
-        account,
-        chain,
-        transport: http(process.env[chainConfig.rpcEnvKey] ?? chainConfig.publicRpcFallback),
-    })
-
-    const publicClient = createPublicClient({
-        chain,
-        transport: http(process.env[chainConfig.rpcEnvKey] ?? chainConfig.publicRpcFallback),
-    })
-
     let txHash: `0x${string}`
 
-    if (tokenAddress === NATIVE_TOKEN_ADDRESS) {
-        txHash = await walletClient.sendTransaction({
-            to: toAddress,
-            value: amountRaw,
-        })
-    } else {
-        const data = encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [toAddress, amountRaw],
-        })
-        txHash = await walletClient.sendTransaction({
-            to: tokenAddress as `0x${string}`,
-            data,
-        })
+    try {
+        if (tokenAddress === NATIVE_TOKEN_ADDRESS) {
+            txHash = await hotWallet.sendTransaction({
+                to: toAddress,
+                value: amountRaw,
+            })
+        } else {
+            txHash = await hotWallet.sendTransaction({
+                to: tokenAddress as `0x${string}`,
+                data: encodeFunctionData({
+                    abi: erc20Abi,
+                    functionName: 'transfer',
+                    args: [toAddress, amountRaw],
+                }),
+            })
+        }
+    } catch (broadcastErr) {
+        // Re-credit user so they aren't debited for a tx that never went out
+        await creditBalance({
+            userId,
+            chainId,
+            tokenSymbol,
+            tokenAddress: ledgerAddr,
+            amount,
+            type: 'adjustment',
+            refId: withdrawalId,
+            note: `Withdrawal broadcast failed — reversal`,
+        }).catch((e) => console.error('[transfer] Re-credit after failed broadcast:', e))
+
+        await supabase
+            .from('withdrawals')
+            .update({ status: 'failed' })
+            .eq('id', withdrawalId)
+
+        throw broadcastErr
     }
 
+    // ── 4. Wait for confirmation ───────────────────────────────────────────
     const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
         timeout: 120_000,
     })
 
-    const gasUsed = receipt.gasUsed.toString()
     const gasPrice = receipt.effectiveGasPrice ?? BigInt(0)
     const feeWei = receipt.gasUsed * gasPrice
     const fee = formatUnits(feeWei, 18)
-    privateKey = '0'.repeat(privateKey.length)
+    const gasUsed = receipt.gasUsed.toString()
+
+    // ── 5. Mark completed ──────────────────────────────────────────────────
     await supabase
         .from('withdrawals')
         .update({
@@ -155,8 +169,7 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
             status: 'completed',
             completed_at: new Date().toISOString(),
         })
-        .eq('user_id', userId)
-        .eq('status', 'processing')
+        .eq('id', withdrawalId)
 
     return { txHash, gasUsed, fee }
 }

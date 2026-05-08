@@ -1,12 +1,78 @@
-/**
- * Supabase database types.
- * Regenerate with: npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/lib/database.types.ts
- */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export interface Database {
     public: {
         Tables: {
+            ledger_balances: {
+                Row: {
+                    id:            string
+                    user_id:       string
+                    chain_id:      number
+                    token_symbol:  string
+                    token_address: string
+                    balance:       string
+                    updated_at:    string
+                }
+                Insert: {
+                    id?:           string
+                    user_id:       string
+                    chain_id:      number
+                    token_symbol:  string
+                    token_address: string
+                    balance?:      string
+                    updated_at?:   string
+                }
+                Update: {
+                    balance?:    string
+                    updated_at?: string
+                }
+            }
+            ledger_transactions: {
+                Row: {
+                    id:            string
+                    user_id:       string
+                    chain_id:      number
+                    token_symbol:  string
+                    token_address: string
+                    amount:        string
+                    direction:     'credit' | 'debit'
+                    type:          string
+                    ref_id:        string | null
+                    note:          string | null
+                    balance_after: string
+                    created_at:    string
+                }
+                Insert: never 
+                Update: never
+            }
+            platform_wallets: {
+                Row: {
+                    id: string
+                    chain_id: number
+                    address: string
+                    encrypted_private_key: string
+                    encrypted_dek: string
+                    derivation_path: string
+                    label: string
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    chain_id: number
+                    address: string
+                    encrypted_private_key: string
+                    encrypted_dek: string
+                    derivation_path: string
+                    label?: string
+                    created_at?: string
+                }
+                Update: {
+                    address?: string
+                    encrypted_private_key?: string
+                    encrypted_dek?: string
+                    label?: string
+                }
+            }
             users: {
                 Row: {
                     id: string

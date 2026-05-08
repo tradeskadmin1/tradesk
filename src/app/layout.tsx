@@ -37,12 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${syne.variable} ${spaceMono.variable} ${dmSans.variable} h-full antialiased`}
-    >
-      <body
-        className="relative min-h-screen overflow-x-hidden bg-linear-to-br from-black via-[#0B0F14] to-[#121821]">
+    <html lang="en" className={`${syne.variable} ${spaceMono.variable} ${dmSans.variable} h-full antialiased`}>
+      <body className="relative min-h-screen overflow-x-hidden bg-linear-to-br from-black via-[#0B0F14] to-[#121821]">
         <Providers>
           <div className="fixed inset-0 -z-10">
             <Web3bg />

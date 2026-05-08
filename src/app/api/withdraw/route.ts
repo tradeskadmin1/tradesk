@@ -3,21 +3,14 @@ import { isAddress, getAddress } from 'viem'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { executeWithdrawal, estimateWithdrawalFee } from '@/lib/transfer'
+import { getPlatformAddress } from '@/lib/platform-wallet'
+import { getBalance } from '@/lib/ledger'
 import { isSupportedChain, getChainConfig, type SupportedChainId } from '@/config/chains'
-import { TOKENS } from '@/config/tokens'
+import { TOKENS, NATIVE_TOKEN_ADDRESS } from '@/config/tokens'
 
-/**
- * POST /api/withdraw
- *
- * Body: { chainId, tokenSymbol, amount, toAddress }
- *
- * Flow:
- *  1. Validate inputs
- *  2. Verify wallet belongs to user
- *  3. Create a 'pending' withdrawal record
- *  4. Execute on-chain transfer
- *  5. Update record to 'completed'
- */
+const LEDGER_NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+
 export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServerClient()
@@ -50,9 +43,9 @@ export async function POST(req: Request) {
 
     const checksummedAddress = getAddress(toAddress) as `0x${string}`
 
-    // ── Verify wallet belongs to user ──────────────────────────────────────
     const adminClient = createSupabaseAdminClient() as any
 
+    // ── Verify wallet belongs to user ──────────────────────────────────────
     const { data: wallet, error: walletError } = await adminClient
       .from('custodial_wallets')
       .select('id, address')
@@ -61,17 +54,34 @@ export async function POST(req: Request) {
       .single()
 
     if (walletError || !wallet) {
+      return NextResponse.json({ error: 'Wallet not found for this chain' }, { status: 404 })
+    }
+
+    // ── Check ledger balance ───────────────────────────────────────────────
+    const rawTokenAddress = TOKENS[tokenSymbol].addresses[chainId] ?? ''
+    const ledgerTokenAddress = rawTokenAddress === NATIVE_TOKEN_ADDRESS
+      ? LEDGER_NATIVE_ADDRESS
+      : rawTokenAddress.toLowerCase()
+
+    const ledgerBalance = await getBalance({
+      userId: user.id,
+      chainId,
+      tokenAddress: ledgerTokenAddress,
+    })
+
+    if (parseFloat(ledgerBalance) < parseFloat(amount)) {
       return NextResponse.json(
-        { error: 'Wallet not found for this chain' },
-        { status: 404 },
+        { error: `Insufficient balance. Available: ${ledgerBalance} ${tokenSymbol}` },
+        { status: 400 },
       )
     }
 
-    // ── Estimate fee ───────────────────────────────────────────────────────
+    // ── Estimate fee (from hot wallet address) ─────────────────────────────
+    const hotAddress = await getPlatformAddress(chainId)
     const { feeEth } = await estimateWithdrawalFee(
       chainId,
       tokenSymbol,
-      wallet.address as `0x${string}`,
+      hotAddress as `0x${string}`,
       checksummedAddress,
       amount,
     )
@@ -80,15 +90,15 @@ export async function POST(req: Request) {
     const { data: withdrawal, error: insertError } = await adminClient
       .from('withdrawals')
       .insert({
-        user_id:       user.id,
-        wallet_id:     wallet.id,
-        chain_id:      chainId,
-        token_symbol:  tokenSymbol,
-        token_address: TOKENS[tokenSymbol].addresses[chainId] ?? '',
+        user_id: user.id,
+        wallet_id: wallet.id,
+        chain_id: chainId,
+        token_symbol: tokenSymbol,
+        token_address: ledgerTokenAddress,
         amount,
-        fee:           feeEth,
-        to_address:    checksummedAddress,
-        status:        'processing',
+        fee: feeEth,
+        to_address: checksummedAddress,
+        status: 'processing',
       })
       .select('id')
       .single()
@@ -99,20 +109,21 @@ export async function POST(req: Request) {
 
     // ── Execute on-chain ───────────────────────────────────────────────────
     const result = await executeWithdrawal({
-      userId:      user.id,
-      walletId:    wallet.id,
+      userId: user.id,
+      walletId: wallet.id,
+      withdrawalId: withdrawal.id,
       chainId,
       tokenSymbol,
       amount,
-      toAddress:   checksummedAddress,
+      toAddress: checksummedAddress,
     })
 
     return NextResponse.json({
-      success:      true,
+      success: true,
       withdrawalId: withdrawal.id,
-      txHash:       result.txHash,
-      fee:          result.fee,
-      gasUsed:      result.gasUsed,
+      txHash: result.txHash,
+      fee: result.fee,
+      gasUsed: result.gasUsed,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Withdrawal failed'
@@ -123,13 +134,7 @@ export async function POST(req: Request) {
   }
 }
 
-/**
- * GET /api/withdraw?id=xxx
- *   Returns status of a specific withdrawal.
- *
- * GET /api/withdraw?chainId=1&token=ETH&amount=0.1&toAddress=0x...
- *   Returns a fee estimate (does NOT submit the withdrawal).
- */
+
 export async function GET(req: Request) {
   try {
     const supabase = await createSupabaseServerClient()
@@ -160,10 +165,10 @@ export async function GET(req: Request) {
     }
 
     // ── Fee estimation ─────────────────────────────────────────────────────
-    const chainIdParam  = searchParams.get('chainId')
-    const tokenSymbol   = searchParams.get('token')
-    const amount        = searchParams.get('amount')
-    const toAddress     = searchParams.get('toAddress')
+    const chainIdParam = searchParams.get('chainId')
+    const tokenSymbol = searchParams.get('token')
+    const amount = searchParams.get('amount')
+    const toAddress = searchParams.get('toAddress')
 
     if (!chainIdParam || !tokenSymbol || !amount || !toAddress) {
       return NextResponse.json(
@@ -196,20 +201,21 @@ export async function GET(req: Request) {
     }
 
     const chainCfg = getChainConfig(chainId)
+    const hotAddress = await getPlatformAddress(chainId)
 
     const { feeEth, feeUsd } = await estimateWithdrawalFee(
       chainId,
       tokenSymbol,
-      wallet.address as `0x${string}`,
+      hotAddress as `0x${string}`,
       getAddress(toAddress) as `0x${string}`,
       amount,
     )
 
     return NextResponse.json({
-      estimatedFee:    feeEth,
+      estimatedFee: feeEth,
       estimatedFeeUsd: feeUsd ?? null,
-      token:           chainCfg.nativeCurrency.symbol,
-      network:         chainCfg.name,
+      token: chainCfg.nativeCurrency.symbol,
+      network: chainCfg.name,
     })
   } catch (err) {
     console.error('[GET /api/withdraw]', err)
