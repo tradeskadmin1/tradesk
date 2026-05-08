@@ -43,21 +43,36 @@ export default function DashboardPage() {
         return
       }
 
-      // Check onboarded flag
-      const { data: userData } = await supabase
+      // Check onboarded flag — only redirect if the row exists and is
+      // explicitly false. If the row is missing (null) the user may have
+      // just completed onboarding and the DB write is still propagating,
+      // so we allow them through rather than creating a redirect loop.
+      const { data: userData, error: userErr } = await supabase
         .from("users")
-        .select("full_name, onboarded, kyc_status")
+        .select("onboarded, kyc_status")
         .eq("id", user.id)
-        .single()
+        .maybeSingle()
 
-      if (!userData?.onboarded) {
+      console.log("[dashboard] userData:", userData, "error:", userErr)
+
+      // Only redirect if the row exists AND onboarded is explicitly false.
+      // null means the row doesn't exist yet — allow through.
+      if (userData?.onboarded === false) {
         router.replace("/onboarding")
         return
       }
 
-      if (userData?.full_name) {
-        setUserName(userData.full_name.split(" ")[0])
-      }
+      // Fetch full_name separately — column may be missing in older DB schemas
+      try {
+        const { data: nameRow } = await supabase
+          .from("users")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle()
+        if ((nameRow as any)?.full_name) {
+          setUserName((nameRow as any).full_name.split(" ")[0])
+        }
+      } catch { /* column doesn't exist yet — name stays empty */ }
 
       // Fetch metrics in parallel
       const [oppsRes, historyRes, balancesRes] = await Promise.allSettled([
@@ -157,9 +172,10 @@ export default function DashboardPage() {
               </p>
             </div>
             <button
-              onClick={() => setShowTrade(true)}
-              className="bg-[#FF5733] hover:bg-[#ff6a4d] text-white cursor-pointer px-4 py-2 rounded-xl font-mono text-sm font-bold transition-all hover:-translate-y-0.5 w-full sm:w-auto"
+              onClick={() => metrics.kycStatus === "approved" ? setShowTrade(true) : router.push("/kyc")}
+              className="bg-[#FF5733] hover:bg-[#ff6a4d] text-white cursor-pointer px-4 py-2 rounded-xl font-mono text-sm font-bold transition-all hover:-translate-y-0.5 w-full sm:w-auto flex items-center gap-2"
             >
+              {metrics.kycStatus !== "approved" && <span>🔒</span>}
               + New Trade
             </button>
           </div>
@@ -199,7 +215,7 @@ export default function DashboardPage() {
           {/* Lower grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
-              <TopOpportunities />
+              <TopOpportunities kycStatus={metrics.kycStatus} />
               <SpreadDistribution />
             </div>
             <div className="space-y-4">
@@ -210,7 +226,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {showTrade && <TradeModal onClose={() => setShowTrade(false)} />}
+      {showTrade && <TradeModal onClose={() => setShowTrade(false)} kycStatus={metrics.kycStatus} />}
     </div>
   )
 }

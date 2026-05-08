@@ -45,6 +45,7 @@ function RiskBar({ score }: { score: number }) {
 export default function ScannerPage() {
   const router = useRouter()
 
+  const [kycStatus, setKycStatus] = useState<string | null>(null)
   const [opps,      setOpps]      = useState<Opportunity[]>([])
   const [loading,   setLoading]   = useState(true)
   const [scanning,  setScanning]  = useState(false)
@@ -73,6 +74,7 @@ export default function ScannerPage() {
   }, [minProfit, maxRisk, filterPair])
 
   const scan = async () => {
+    if (kycStatus !== "approved") { router.push("/kyc"); return }
     setScanning(true)
     try {
       const res  = await fetch("/api/arbitrage/scan", { method: "POST" })
@@ -91,6 +93,14 @@ export default function ScannerPage() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace("/auth"); return }
+
+      const { data: userData } = await supabase
+        .from("users")
+        .select("kyc_status")
+        .eq("id", user.id)
+        .maybeSingle()
+      setKycStatus((userData as any)?.kyc_status ?? "none")
+
       await load()
     }
     init()
@@ -117,23 +127,55 @@ export default function ScannerPage() {
                 {lastScan && ` · last scan ${lastScan}`}
               </p>
             </div>
-            <button
-              onClick={scan}
-              disabled={scanning}
-              className="flex items-center justify-center gap-2 bg-[#FF5733] hover:bg-[#ff6a4d] text-white px-5 py-2.5 rounded-xl font-mono text-[13px] font-bold transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 w-full sm:w-auto"
-            >
-              {scanning ? (
-                <>
-                  <span className="flex gap-1">
-                    {[0,1,2].map((i) => (
-                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
-                    ))}
-                  </span>
-                  Scanning Markets...
-                </>
-              ) : "⚡ Scan Now"}
-            </button>
+            {kycStatus === "approved" ? (
+              <button
+                onClick={scan}
+                disabled={scanning}
+                className="flex items-center justify-center gap-2 bg-[#FF5733] hover:bg-[#ff6a4d] text-white px-5 py-2.5 rounded-xl font-mono text-[13px] font-bold transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 w-full sm:w-auto"
+              >
+                {scanning ? (
+                  <>
+                    <span className="flex gap-1">
+                      {[0,1,2].map((i) => (
+                        <span key={i} className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
+                      ))}
+                    </span>
+                    Scanning Markets...
+                  </>
+                ) : "⚡ Scan Now"}
+              </button>
+            ) : kycStatus !== null && (
+              <button
+                onClick={() => router.push("/kyc")}
+                className="flex items-center justify-center gap-2 border border-[#FF5733]/30 bg-[#FF5733]/5 hover:bg-[#FF5733]/10 text-[#FF5733] px-5 py-2.5 rounded-xl font-mono text-[13px] font-bold transition-all cursor-pointer w-full sm:w-auto"
+              >
+                🔒 Verify Identity to Scan
+              </button>
+            )}
           </div>
+
+          {/* KYC banner */}
+          {kycStatus !== null && kycStatus !== "approved" && (
+            <div
+              onClick={() => router.push("/kyc")}
+              className="flex items-center gap-3 bg-[#1e1208] border border-[#FF5733]/20 rounded-xl px-4 py-3 cursor-pointer hover:border-[#FF5733]/40 transition-all"
+            >
+              <span className="text-lg">🪪</span>
+              <div className="flex-1">
+                <span className="font-mono text-[12px] text-white">
+                  {kycStatus === "pending" ? "Verification Under Review" : "Identity Verification Required"}
+                </span>
+                <span className="font-mono text-[11px] text-[#7a6a5a] block">
+                  {kycStatus === "pending"
+                    ? "Scanning will be unlocked once your identity is approved."
+                    : "Complete KYC to unlock live arbitrage scanning."}
+                </span>
+              </div>
+              {kycStatus !== "pending" && (
+                <span className="font-mono text-[11px] text-[#FF5733]">Verify →</span>
+              )}
+            </div>
+          )}
 
           {/* Scan stats */}
           {scanStats && (

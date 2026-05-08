@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { ACTIVE_PAIRS } from "@/config/pairs"
 import { CHAIN_CONFIG, type SupportedChainId } from "@/config/chains"
 
 interface Props {
-  onClose:       () => void
+  onClose:        () => void
   defaultPairId?: string
+  kycStatus?:     string
 }
 
 interface QuoteData {
@@ -30,8 +32,10 @@ interface TradeResult {
   dexUsed:    string
 }
 
-export default function TradeModal({ onClose, defaultPairId }: Props) {
+export default function TradeModal({ onClose, defaultPairId, kycStatus }: Props) {
+  const router     = useRouter()
   const overlayRef = useRef<HTMLDivElement>(null)
+  const kycApproved = kycStatus === "approved"
 
   const [pairId,   setPairId]   = useState(defaultPairId ?? ACTIVE_PAIRS[0]?.id ?? "ETH_USDC")
   const [chainId,  setChainId]  = useState<SupportedChainId>(1)
@@ -153,8 +157,36 @@ export default function TradeModal({ onClose, defaultPairId }: Props) {
           <button onClick={onClose} className="text-white/40 hover:text-white transition-colors text-2xl leading-none cursor-pointer">×</button>
         </div>
 
+        {/* ── KYC gate ── */}
+        {!kycApproved && (
+          <div className="flex flex-col items-center gap-5 py-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#FF5733]/10 border border-[#FF5733]/30 flex items-center justify-center text-2xl">🪪</div>
+            <div>
+              <div className="font-mono text-[15px] font-bold text-white mb-1">Identity Verification Required</div>
+              <div className="font-mono text-[12px] text-[#7a6a5a] max-w-xs">
+                {kycStatus === "pending"
+                  ? "Your verification is under review. Trading will be unlocked once approved."
+                  : kycStatus === "rejected"
+                  ? "Your verification was rejected. Please resubmit your documents to trade."
+                  : "Complete a quick identity check to unlock trading. It takes about 2 minutes."}
+              </div>
+            </div>
+            {kycStatus !== "pending" && (
+              <button
+                onClick={() => { onClose(); router.push("/kyc") }}
+                className="px-6 py-3 rounded-xl font-mono text-[13px] font-bold bg-[#FF5733] hover:bg-[#ff6a4d] text-white transition-all hover:-translate-y-0.5 cursor-pointer"
+              >
+                Verify Identity →
+              </button>
+            )}
+            <button onClick={onClose} className="font-mono text-[11px] text-[#4a3a2a] hover:text-[#7a6a5a] transition-colors cursor-pointer">
+              Maybe later
+            </button>
+          </div>
+        )}
+
         {/* ── Success state ── */}
-        {result && (
+        {kycApproved && result && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center gap-3 py-4 text-center">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl">✓</div>
@@ -190,7 +222,7 @@ export default function TradeModal({ onClose, defaultPairId }: Props) {
         )}
 
         {/* ── Trade form ── */}
-        {!result && (
+        {kycApproved && !result && (
           <div className="flex flex-col gap-4">
             {/* Pair selector */}
             <div className="flex flex-col gap-1.5">

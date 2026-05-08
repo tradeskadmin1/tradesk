@@ -3,7 +3,7 @@ import { Syne, Space_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
 import Web3bg from "./components/3bg";
 import { Providers } from "./providers";
-import Nav from './components/nav'
+import PublicNav from './components/public-shell'
 import Footer from './components/footer'
 
 const syne = Syne({
@@ -47,7 +47,7 @@ export default function RootLayout({
           <div className="fixed inset-0 -z-10">
             <Web3bg />
           </div>
-          <Nav />
+          <PublicNav />
           <main className="relative z-10 flex flex-col min-h-screen">
             {children}
           </main>

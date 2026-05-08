@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
 import { createWalletsForUser } from '@/lib/wallet'
 
+const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
-export async function POST() {
+export async function POST(req: Request) {
     try {
         const supabase = await createSupabaseServerClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -12,15 +13,42 @@ export async function POST() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const wallets = await createWalletsForUser(user.id)
+        // Parse optional profile fields sent from onboarding
+        let fullName: string | undefined
+        let email: string | undefined
+        try {
+            const body = await req.json()
+            fullName = body.fullName
+            email    = body.email
+        } catch {
+            // Body is optional — wallet-only calls won't send it
+        }
 
-        return NextResponse.json({
-            success: true,
-            wallets: wallets.map((w) => ({
-                chainId: w.chainId,
-                address: w.address,
-            })),
+        // ── Mark onboarded via RPC (bypasses PostgREST schema cache) ─────────────
+        const adminClient = createSupabaseAdminClient()
+        const { error: rpcErr } = await adminClient.rpc('mark_user_onboarded', {
+            p_user_id:   user.id,
+            p_email:     email     ?? user.email ?? null,
+            p_full_name: fullName  ?? null,
         })
+
+        if (rpcErr) {
+            console.error('[POST /api/wallets/create] mark_user_onboarded RPC failed:', rpcErr)
+        } else {
+            console.log('[POST /api/wallets/create] User marked as onboarded:', user.id)
+        }
+
+        // ── Wallet creation (non-fatal) ─────────────────────────────────────────
+        let wallets: { chainId: number; address: string }[] = []
+        try {
+            const created = await createWalletsForUser(user.id)
+            wallets = created.map((w) => ({ chainId: w.chainId, address: w.address }))
+        } catch (walletErr) {
+            console.error('[POST /api/wallets/create] Wallet creation error:', walletErr)
+            // Non-fatal — user is already onboarded; wallets can be created later
+        }
+
+        return NextResponse.json({ success: true, wallets })
     } catch (err) {
         console.error('[POST /api/wallets/create]', err)
         return NextResponse.json(

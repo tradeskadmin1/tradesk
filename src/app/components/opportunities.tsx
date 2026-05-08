@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 
 interface Opportunity {
   id:             string
@@ -30,12 +31,15 @@ function RiskBadge({ score }: { score: number }) {
   )
 }
 
-export default function TopOpportunities() {
+export default function TopOpportunities({ kycStatus }: { kycStatus?: string }) {
+  const router = useRouter()
   const [opps,     setOpps]     = useState<Opportunity[]>([])
   const [loading,  setLoading]  = useState(true)
   const [scanning, setScanning] = useState(false)
   const [lastScan, setLastScan] = useState<string | null>(null)
   const [count,    setCount]    = useState(0)
+
+  const kycApproved = kycStatus === "approved"
 
   const fetch5 = useCallback(async () => {
     try {
@@ -51,6 +55,10 @@ export default function TopOpportunities() {
   }, [])
 
   const scan = async () => {
+    if (!kycApproved) {
+      router.push("/kyc")
+      return
+    }
     setScanning(true)
     try {
       await fetch("/api/arbitrage/scan", { method: "POST" })
@@ -83,22 +91,31 @@ export default function TopOpportunities() {
               {count} live
             </span>
           )}
-          <button
-            onClick={scan}
-            disabled={scanning}
-            className="font-mono text-[10px] text-[#7a6a5a] hover:text-white border border-[#2e2520] hover:border-white/20 px-2.5 py-1 rounded transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {scanning ? (
-              <span className="flex items-center gap-1.5">
-                <span className="flex gap-0.5">
-                  {[0,1,2].map((i) => (
-                    <span key={i} className="w-1 h-1 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
-                  ))}
+          {kycApproved ? (
+            <button
+              onClick={scan}
+              disabled={scanning}
+              className="font-mono text-[10px] text-[#7a6a5a] hover:text-white border border-[#2e2520] hover:border-white/20 px-2.5 py-1 rounded transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {scanning ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="flex gap-0.5">
+                    {[0,1,2].map((i) => (
+                      <span key={i} className="w-1 h-1 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
+                    ))}
+                  </span>
+                  Scanning
                 </span>
-                Scanning
-              </span>
-            ) : "↻ Scan"}
-          </button>
+              ) : "↻ Scan"}
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push("/kyc")}
+              className="font-mono text-[10px] text-[#FF5733] border border-[#FF5733]/20 hover:border-[#FF5733]/50 bg-[#FF5733]/5 px-2.5 py-1 rounded transition-all cursor-pointer flex items-center gap-1"
+            >
+              🔒 Verify to Scan
+            </button>
+          )}
         </div>
       </div>
 

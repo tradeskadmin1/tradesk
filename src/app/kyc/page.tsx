@@ -10,13 +10,13 @@ type IdType = "passport" | "national_id" | "drivers_license"
 type KycStatus = "none" | "pending" | "approved" | "rejected"
 
 interface KycFormData {
-  fullName:    string
+  fullName: string
   dateOfBirth: string
   nationality: string
-  idType:      IdType | ""
-  idFront:     File | null
-  idBack:      File | null
-  selfie:      File | null
+  idType: IdType | ""
+  idFront: File | null
+  idBack: File | null
+  selfie: File | null
 }
 
 // ── File upload slot ──────────────────────────────────────────────────────────
@@ -29,12 +29,12 @@ function FileSlot({
   onSelect,
   onClear,
 }: {
-  label:    string
-  hint:     string
-  file:     File | null
+  label: string
+  hint: string
+  file: File | null
   required?: boolean
   onSelect: (f: File) => void
-  onClear:  () => void
+  onClear: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -109,30 +109,30 @@ function StatusCard({
   submission,
   onResubmit,
 }: {
-  status:     KycStatus
+  status: KycStatus
   submission: Record<string, unknown> | null
   onResubmit: () => void
 }) {
   const configs = {
     pending: {
-      icon:    "🕐",
-      color:   "#f59e0b",
-      bg:      "#f59e0b",
-      label:   "Under Review",
+      icon: "🕐",
+      color: "#f59e0b",
+      bg: "#f59e0b",
+      label: "Under Review",
       message: "Your documents have been submitted and are being reviewed. This typically takes 1–2 business days.",
     },
     approved: {
-      icon:    "✓",
-      color:   "#22c55e",
-      bg:      "#22c55e",
-      label:   "Verified",
+      icon: "✓",
+      color: "#22c55e",
+      bg: "#22c55e",
+      label: "Verified",
       message: "Your identity has been verified. You now have full access to all trading features.",
     },
     rejected: {
-      icon:    "✗",
-      color:   "#FF5733",
-      bg:      "#FF5733",
-      label:   "Action Required",
+      icon: "✗",
+      color: "#FF5733",
+      bg: "#FF5733",
+      label: "Action Required",
       message: "Your submission was rejected. Please re-submit with clearer documents.",
     },
   }
@@ -157,10 +157,10 @@ function StatusCard({
       {submission && (
         <div className="w-full bg-[#120d08] border border-[#2e2520] rounded-xl overflow-hidden">
           {[
-            { label: "Full Name",  value: submission.full_name   as string },
+            { label: "Full Name", value: submission.full_name as string },
             { label: "Nationality", value: submission.nationality as string },
-            { label: "ID Type",    value: (submission.id_type as string)?.replace("_", " ") },
-            { label: "Submitted",  value: new Date(submission.submitted_at as string).toLocaleDateString() },
+            { label: "ID Type", value: (submission.id_type as string)?.replace("_", " ") },
+            { label: "Submitted", value: new Date(submission.submitted_at as string).toLocaleDateString() },
           ].map((row, i, arr) => (
             <div key={row.label} className={`flex justify-between items-center px-5 py-3 font-mono text-[12px] ${i < arr.length - 1 ? "border-b border-[#2e2520]" : ""}`}>
               <span className="text-[#7a6a5a] text-[10px] uppercase tracking-wider">{row.label}</span>
@@ -187,23 +187,23 @@ function StatusCard({
 export default function KycPage() {
   const router = useRouter()
 
-  const [loading,    setLoading]    = useState(true)
+  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [success,    setSuccess]    = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
-  const [kycStatus,  setKycStatus]  = useState<KycStatus>("none")
+  const [kycStatus, setKycStatus] = useState<KycStatus>("none")
   const [submission, setSubmission] = useState<Record<string, unknown> | null>(null)
-  const [showForm,   setShowForm]   = useState(false)
+  const [showForm, setShowForm] = useState(false)
 
   const [form, setForm] = useState<KycFormData>({
-    fullName:    "",
+    fullName: "",
     dateOfBirth: "",
     nationality: "",
-    idType:      "",
-    idFront:     null,
-    idBack:      null,
-    selfie:      null,
+    idType: "",
+    idFront: null,
+    idBack: null,
+    selfie: null,
   })
 
   // ── Auth guard + status fetch ─────────────────────────────────────────────
@@ -237,16 +237,16 @@ export default function KycPage() {
     setError(null)
 
     const fd = new FormData()
-    fd.append("fullName",    form.fullName)
+    fd.append("fullName", form.fullName)
     fd.append("dateOfBirth", form.dateOfBirth)
     fd.append("nationality", form.nationality)
-    fd.append("idType",      form.idType)
-    fd.append("idFront",     form.idFront)
-    if (form.idBack)   fd.append("idBack",  form.idBack)
-    if (form.selfie)   fd.append("selfie",  form.selfie)
+    fd.append("idType", form.idType)
+    fd.append("idFront", form.idFront)
+    if (form.idBack) fd.append("idBack", form.idBack)
+    if (form.selfie) fd.append("selfie", form.selfie)
 
     try {
-      const res  = await fetch("/api/kyc/submit", { method: "POST", body: fd })
+      const res = await fetch("/api/kyc/submit", { method: "POST", body: fd })
       const data = await res.json()
 
       if (!res.ok) {
@@ -411,8 +411,8 @@ export default function KycPage() {
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { id: "passport",        label: "Passport",   icon: "🛂" },
-                      { id: "national_id",     label: "National ID", icon: "🪪" },
+                      { id: "passport", label: "Passport", icon: "🛂" },
+                      { id: "national_id", label: "National ID", icon: "🪪" },
                       { id: "drivers_license", label: "Driver's License", icon: "🚗" },
                     ].map((opt) => {
                       const active = form.idType === opt.id

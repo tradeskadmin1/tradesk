@@ -558,9 +558,9 @@ export default function OnboardingPage() {
 
             const { data: userData } = await supabase
                 .from("users")
-                .select("onboarded, name, email")
+                .select("onboarded, full_name, email")
                 .eq("id", user.id)
-                .single()
+                .maybeSingle()
 
             if (userData?.onboarded) {
                 router.replace("/dashboard")
@@ -568,7 +568,7 @@ export default function OnboardingPage() {
             }
             setData((prev) => ({
                 ...prev,
-                name: userData?.name ?? "",
+                name: userData?.full_name ?? "",
                 email: userData?.email ?? user.email ?? "",
             }))
         }
@@ -583,52 +583,54 @@ export default function OnboardingPage() {
 
     const finish = async () => {
         setSaving(true)
+        setSavingMsg("Creating your wallets on ETH, BSC & Arbitrum...")
         try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-
-            setSavingMsg("Saving your profile...")
-            await supabase.from("users").upsert({
-                id: user.id,
-                email: data.email || user.email,
-                full_name: data.name,
-                onboarded: true,
-            })
-
-
-            setSavingMsg("Creating your wallets on ETH, BSC & Arbitrum...")
-            const res = await fetch("/api/wallets/create", { method: "POST" })
-            if (!res.ok) {
-                const err = await res.json()
-                console.error("[onboarding] Wallet creation failed:", err)
+            const { data: { user }, error: authErr } = await supabase.auth.getUser()
+            if (authErr || !user) {
+                console.error("[onboarding] No session:", authErr)
+                window.location.href = "/auth"
+                return
             }
 
-            setSavingMsg("Almost there...")
-            router.push("/dashboard")
+            const res = await fetch("/api/wallets/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    fullName: data.name,
+                    email:    data.email || user.email,
+                }),
+            })
+
+            const json = await res.json().catch(() => ({}))
+            console.log("[onboarding] wallets/create →", res.status, json)
+
+            if (!res.ok) {
+                console.error("[onboarding] Wallet creation failed — proceeding anyway:", json)
+            }
+
+            setSavingMsg("All done! Redirecting...")
+            // Hard redirect — bypasses any stale Next.js router state
+            window.location.href = "/dashboard"
         } catch (err) {
             console.error("[onboarding] finish error:", err)
-            router.push("/dashboard")
-        } finally {
-            setSaving(false)
+            window.location.href = "/dashboard"
         }
     }
 
-    const Header = () => (
-        <div className="flex items-center justify-between mb-6">
-            <div onClick={() => router.push("/")} className="font-mono text-[18px] font-bold text-white cursor-pointer">
-                Trade<span className="text-[#FF5733]">sk</span>
-            </div>
-            <span className="font-mono text-[11px] text-[#4a3a2a] uppercase tracking-widest">
-                Step {step} / {STEPS.length}
-            </span>
-        </div>
-    )
-
-    const Card = ({ children }: { children: React.ReactNode }) => (
+    return (
         <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
             <div className="w-full max-w-lg">
-                <Header />
+
+                {/* Header — inlined to avoid re-mount on every keystroke */}
+                <div className="flex items-center justify-between mb-6">
+                    <div onClick={() => router.push("/")} className="font-mono text-[18px] font-bold text-white cursor-pointer">
+                        Trade<span className="text-[#FF5733]">sk</span>
+                    </div>
+                    <span className="font-mono text-[11px] text-[#4a3a2a] uppercase tracking-widest">
+                        Step {step} / {STEPS.length}
+                    </span>
+                </div>
+
                 <div className="bg-[#1a1410] border border-[#2e2520] rounded-2xl p-6 sm:p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
                     <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#2e2520]">
                         <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
@@ -636,21 +638,16 @@ export default function OnboardingPage() {
                         <div className="w-2 h-2 rounded-full bg-[#28c840]" />
                         <span className="font-mono text-[10px] text-[#4a3a2a] ml-2 tracking-wider">tradesk://onboarding</span>
                     </div>
-                    {children}
+
+                    <ProgressBar step={step} />
+                    {step === 1 && <StepIdentity data={data} onChange={update} onNext={next} />}
+                    {step === 2 && <StepChains selected={data.chains} onChange={(chains) => update("chains", chains)} onNext={next} onBack={back} />}
+                    {step === 3 && <StepStyle selected={data.tradingStyle} onChange={(style) => update("tradingStyle", style)} onNext={next} onBack={back} />}
+                    {step === 4 && <StepRisk selected={data.riskLevel} onChange={(level) => update("riskLevel", level)} onNext={next} onBack={back} />}
+                    {step === 5 && <StepDeposit data={data} onChange={update} onNext={next} onBack={back} />}
+                    {step === 6 && <StepDone data={data} onFinish={finish} />}
                 </div>
             </div>
-        </div>
-    )
-
-    return (
-        <Card>
-            <ProgressBar step={step} />
-            {step === 1 && <StepIdentity data={data} onChange={update} onNext={next} />}
-            {step === 2 && <StepChains selected={data.chains} onChange={(chains) => update("chains", chains)} onNext={next} onBack={back} />}
-            {step === 3 && <StepStyle selected={data.tradingStyle} onChange={(style) => update("tradingStyle", style)} onNext={next} onBack={back} />}
-            {step === 4 && <StepRisk selected={data.riskLevel} onChange={(level) => update("riskLevel", level)} onNext={next} onBack={back} />}
-            {step === 5 && <StepDeposit data={data} onChange={update} onNext={next} onBack={back} />}
-            {step === 6 && <StepDone data={data} onFinish={finish} />}
 
             {saving && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -664,6 +661,6 @@ export default function OnboardingPage() {
                     </div>
                 </div>
             )}
-        </Card>
+        </div>
     )
 }
