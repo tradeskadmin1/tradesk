@@ -385,7 +385,7 @@ export default function KycPage() {
                       onChange={(e) => set("dateOfBirth", e.target.value)}
                       max={new Date(Date.now() - 18 * 365.25 * 24 * 3600 * 1000).toISOString().split("T")[0]}
                       required
-                      className="w-full bg-[#120d08] border border-[#2e2520] focus:border-[#FF5733]/50 outline-none rounded-xl px-4 py-3 font-mono text-[13px] text-white transition-colors [color-scheme:dark]"
+                      className="w-full bg-[#120d08] border border-[#2e2520] focus:border-[#FF5733]/50 outline-none rounded-xl px-4 py-3 font-mono text-[13px] text-white transition-colors scheme:dark"
                     />
                   </div>
 
