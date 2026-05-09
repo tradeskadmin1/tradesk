@@ -28,7 +28,6 @@ function derivePlatformKey(mnemonic: string, chainId: SupportedChainId) {
     return { privateKey, path }
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface PlatformWallet {
     id: string
     chainId: SupportedChainId

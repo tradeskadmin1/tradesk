@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+
 type Chain = "ethereum" | "bsc" | "arbitrum"
 type TradingStyle = "spot" | "arbitrage" | "both"
 type RiskLevel = "conservative" | "moderate" | "aggressive"
@@ -23,7 +23,7 @@ interface OnboardingData {
     depositAmount: string
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+
 const STEPS = ["Identity", "Chains", "Style", "Risk", "Deposit", "Done"]
 
 const COUNTRIES = [
@@ -54,7 +54,6 @@ const MOCK_BALANCES: Record<Token, string> = {
     ETH: "1.842",
 }
 
-// ── Step Components ───────────────────────────────────────────────────────────
 
 function StepIdentity({
     data, onChange, onNext,
@@ -503,7 +502,7 @@ function StepDone({ data, onFinish }: { data: OnboardingData; onFinish: () => vo
     )
 }
 
-// ── Progress Bar ──────────────────────────────────────────────────────────────
+
 function ProgressBar({ step }: { step: number }) {
     return (
         <div className="flex items-center gap-2 mb-8">
@@ -531,7 +530,6 @@ function ProgressBar({ step }: { step: number }) {
     )
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function OnboardingPage() {
     const router = useRouter()
     const [step, setStep] = useState(1)
@@ -597,7 +595,7 @@ export default function OnboardingPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     fullName: data.name,
-                    email:    data.email || user.email,
+                    email: data.email || user.email,
                 }),
             })
 
@@ -609,7 +607,6 @@ export default function OnboardingPage() {
             }
 
             setSavingMsg("All done! Redirecting...")
-            // Hard redirect — bypasses any stale Next.js router state
             window.location.href = "/dashboard"
         } catch (err) {
             console.error("[onboarding] finish error:", err)
@@ -621,7 +618,6 @@ export default function OnboardingPage() {
         <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
             <div className="w-full max-w-lg">
 
-                {/* Header — inlined to avoid re-mount on every keystroke */}
                 <div className="flex items-center justify-between mb-6">
                     <div onClick={() => router.push("/")} className="font-mono text-[18px] font-bold text-white cursor-pointer">
                         Trade<span className="text-[#FF5733]">sk</span>

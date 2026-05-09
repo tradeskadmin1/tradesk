@@ -35,7 +35,6 @@ export async function middleware(req: NextRequest) {
         }
     )
 
-    // ✅ getUser() verifies identity with Supabase Auth server — safe for production
     const { data: { user } } = await supabase.auth.getUser()
     const { pathname } = req.nextUrl
 
@@ -53,7 +52,7 @@ export async function middleware(req: NextRequest) {
         const { data: userData } = await supabase
             .from('users')
             .select('onboarded')
-            .eq('id', user.id)  // ✅ was session.user.id
+            .eq('id', user.id)
             .single()
 
         const onboarded = userData?.onboarded ?? false

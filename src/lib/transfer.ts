@@ -6,19 +6,18 @@ import { debitBalance, creditBalance, getBalance } from './ledger'
 import { TOKENS, NATIVE_TOKEN_ADDRESS } from '@/config/tokens'
 import { getChainConfig, type SupportedChainId } from '@/config/chains'
 
-// Native address used in the ledger (matches what the webhook credits)
 const LEDGER_NATIVE_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 function toLedgerAddress(tokenAddress: string): string {
     return tokenAddress === NATIVE_TOKEN_ADDRESS ? LEDGER_NATIVE_ADDRESS : tokenAddress.toLowerCase()
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────
+
 
 export interface WithdrawalRequest {
     userId: string
-    walletId: string   // custodial_wallets.id
-    withdrawalId: string   // withdrawals.id — used to mark completed/failed
+    walletId: string
+    withdrawalId: string
     chainId: SupportedChainId
     tokenSymbol: string
     amount: string
@@ -31,7 +30,7 @@ export interface TransferResult {
     fee: string
 }
 
-// ── Gas estimation ─────────────────────────────────────────────────────────
+
 
 export async function estimateWithdrawalFee(
     chainId: SupportedChainId,
@@ -85,13 +84,11 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
 
     const ledgerAddr = toLedgerAddress(tokenAddress)
 
-    // ── 1. Check ledger balance ────────────────────────────────────────────
     const ledgerBalance = await getBalance({ userId, chainId, tokenAddress: ledgerAddr })
     if (parseFloat(ledgerBalance) < parseFloat(amount)) {
         throw new Error(`[transfer] Insufficient ledger balance. Have ${ledgerBalance}, need ${amount}`)
     }
 
-    // ── 2. Debit ledger atomically (throws if balance races below zero) ────
     await debitBalance({
         userId,
         chainId,
@@ -103,7 +100,6 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
         note: `Withdrawal to ${toAddress}`,
     })
 
-    // ── 3. Broadcast from hot wallet ───────────────────────────────────────
     const {
         walletClient: hotWallet,
         publicClient,
@@ -129,7 +125,6 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
             })
         }
     } catch (broadcastErr) {
-        // Re-credit user so they aren't debited for a tx that never went out
         await creditBalance({
             userId,
             chainId,
@@ -149,7 +144,6 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
         throw broadcastErr
     }
 
-    // ── 4. Wait for confirmation ───────────────────────────────────────────
     const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
         timeout: 120_000,
@@ -160,7 +154,6 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
     const fee = formatUnits(feeWei, 18)
     const gasUsed = receipt.gasUsed.toString()
 
-    // ── 5. Mark completed ──────────────────────────────────────────────────
     await supabase
         .from('withdrawals')
         .update({

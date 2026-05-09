@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+
 
 type IdType = "passport" | "national_id" | "drivers_license"
 type KycStatus = "none" | "pending" | "approved" | "rejected"
@@ -19,7 +19,6 @@ interface KycFormData {
   selfie: File | null
 }
 
-// ── File upload slot ──────────────────────────────────────────────────────────
 
 function FileSlot({
   label,
@@ -102,7 +101,6 @@ function FileSlot({
   )
 }
 
-// ── Status display ────────────────────────────────────────────────────────────
 
 function StatusCard({
   status,
@@ -182,7 +180,6 @@ function StatusCard({
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function KycPage() {
   const router = useRouter()
@@ -206,7 +203,6 @@ export default function KycPage() {
     selfie: null,
   })
 
-  // ── Auth guard + status fetch ─────────────────────────────────────────────
 
   useEffect(() => {
     const init = async () => {
@@ -227,7 +223,6 @@ export default function KycPage() {
     init()
   }, [router])
 
-  // ── Form submit ───────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -274,7 +269,6 @@ export default function KycPage() {
     form.idType &&
     form.idFront
 
-  // ── Shared card wrapper ───────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -291,8 +285,6 @@ export default function KycPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-[#0d0a07]">
       <div className="w-full max-w-lg">
-
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div onClick={() => router.push("/dashboard")} className="font-mono text-[18px] font-bold text-white cursor-pointer">
             Trade<span className="text-[#FF5733]">sk</span>
@@ -305,9 +297,7 @@ export default function KycPage() {
           </button>
         </div>
 
-        {/* Card */}
         <div className="bg-[#1a1410] border border-[#2e2520] rounded-2xl p-6 sm:p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
-          {/* Traffic lights */}
           <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#2e2520]">
             <div className="w-2 h-2 rounded-full bg-[#ff5f57]" />
             <div className="w-2 h-2 rounded-full bg-[#febc2e]" />
@@ -315,7 +305,6 @@ export default function KycPage() {
             <span className="font-mono text-[10px] text-[#4a3a2a] ml-2 tracking-wider">tradesk://kyc</span>
           </div>
 
-          {/* ── Success state ── */}
           {success && (
             <div className="flex flex-col items-center gap-5 text-center py-4">
               <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-2xl">✓</div>
@@ -334,7 +323,6 @@ export default function KycPage() {
             </div>
           )}
 
-          {/* ── Existing status (not none) ── */}
           {!success && !showForm && (kycStatus === "pending" || kycStatus === "approved" || kycStatus === "rejected") && (
             <StatusCard
               status={kycStatus}
@@ -343,7 +331,6 @@ export default function KycPage() {
             />
           )}
 
-          {/* ── KYC form ── */}
           {!success && (showForm || kycStatus === "none") && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div>
@@ -353,12 +340,10 @@ export default function KycPage() {
                 </p>
               </div>
 
-              {/* Info banner */}
               <div className="bg-[#1e1208] border border-[#FF5733]/10 rounded-xl px-4 py-3 font-mono text-[11px] text-[#7a6a5a]">
                 🔒 Documents are encrypted at rest in private storage. Only compliance staff can access them.
               </div>
 
-              {/* Personal info */}
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">
@@ -404,7 +389,6 @@ export default function KycPage() {
                   </div>
                 </div>
 
-                {/* ID type */}
                 <div className="flex flex-col gap-1.5">
                   <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">
                     Document Type <span className="text-[#FF5733]">*</span>
@@ -432,7 +416,6 @@ export default function KycPage() {
                 </div>
               </div>
 
-              {/* Document uploads */}
               <div className="border-t border-[#2e2520] pt-5 flex flex-col gap-4">
                 <div className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Document Photos</div>
 
@@ -465,14 +448,12 @@ export default function KycPage() {
                 />
               </div>
 
-              {/* Error */}
               {error && (
                 <div className="bg-[#FF5733]/5 border border-[#FF5733]/30 rounded-xl px-4 py-3 font-mono text-[12px] text-[#FF5733]">
                   ⚠ {error}
                 </div>
               )}
 
-              {/* Submit */}
               <button
                 type="submit"
                 disabled={!isValid || submitting}

@@ -17,7 +17,7 @@ CREATE POLICY "ledger_balances: read own"
   USING (auth.uid() = user_id);
 
 
--- ─────────────────────────────────────────────────────────────────────────────
+
 
 CREATE TABLE IF NOT EXISTS public.ledger_transactions (
   id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

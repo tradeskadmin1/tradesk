@@ -14,26 +14,26 @@ import LiveAlerts from "../components/alerts"
 import TradeModal from "../components/trade-modal"
 
 interface DashboardMetrics {
-  opportunities:  number
-  activeTrades:   number
+  opportunities: number
+  activeTrades: number
   totalBalanceUsd: string
-  kycStatus:      string
+  kycStatus: string
 }
 
 export default function DashboardPage() {
   const router = useRouter()
 
-  const [userName,    setUserName]    = useState("")
-  const [showTrade,   setShowTrade]   = useState(false)
-  const [loading,     setLoading]     = useState(true)
-  const [metrics,     setMetrics]     = useState<DashboardMetrics>({
-    opportunities:   0,
-    activeTrades:    0,
+  const [userName, setUserName] = useState("")
+  const [showTrade, setShowTrade] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    opportunities: 0,
+    activeTrades: 0,
     totalBalanceUsd: "0.00",
-    kycStatus:       "none",
+    kycStatus: "none",
   })
 
-  // ── Auth + data load ────────────────────────────────────────────────────────
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -43,10 +43,6 @@ export default function DashboardPage() {
         return
       }
 
-      // Check onboarded flag — only redirect if the row exists and is
-      // explicitly false. If the row is missing (null) the user may have
-      // just completed onboarding and the DB write is still propagating,
-      // so we allow them through rather than creating a redirect loop.
       const { data: userData, error: userErr } = await supabase
         .from("users")
         .select("onboarded, kyc_status")
@@ -55,14 +51,11 @@ export default function DashboardPage() {
 
       console.log("[dashboard] userData:", userData, "error:", userErr)
 
-      // Only redirect if the row exists AND onboarded is explicitly false.
-      // null means the row doesn't exist yet — allow through.
       if (userData?.onboarded === false) {
         router.replace("/onboarding")
         return
       }
 
-      // Fetch full_name separately — column may be missing in older DB schemas
       try {
         const { data: nameRow } = await supabase
           .from("users")
@@ -72,17 +65,16 @@ export default function DashboardPage() {
         if ((nameRow as any)?.full_name) {
           setUserName((nameRow as any).full_name.split(" ")[0])
         }
-      } catch { /* column doesn't exist yet — name stays empty */ }
+      } catch { }
 
-      // Fetch metrics in parallel
       const [oppsRes, historyRes, balancesRes] = await Promise.allSettled([
         fetch("/api/arbitrage/opportunities?limit=1"),
         fetch("/api/trade/history?status=pending&limit=1"),
         fetch("/api/balances"),
       ])
 
-      let opportunities  = 0
-      let activeTrades   = 0
+      let opportunities = 0
+      let activeTrades = 0
       let totalBalanceUsd = "0.00"
 
       if (oppsRes.status === "fulfilled" && oppsRes.value.ok) {
@@ -96,7 +88,6 @@ export default function DashboardPage() {
       }
 
       if (balancesRes.status === "fulfilled" && balancesRes.value.ok) {
-        // Balances are token amounts — we show the raw count for now
         const d = await balancesRes.value.json()
         const allBalances: Array<{ balance: string }> = Object.values(d.balances ?? {}).flat() as any
         const nonZero = allBalances.filter((b) => parseFloat(b.balance) > 0).length
@@ -128,7 +119,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-[#0d0a07] flex items-center justify-center">
         <div className="flex gap-1.5">
-          {[0,1,2].map((i) => (
+          {[0, 1, 2].map((i) => (
             <span key={i} className="w-2 h-2 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
@@ -139,13 +130,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#0d0a07]">
       <Topbar />
-
       <div className="flex">
         <Sidebar />
-
         <div className="flex-1 p-5 space-y-5 overflow-auto">
-
-          {/* KYC banner */}
           {metrics.kycStatus === "none" && (
             <div
               onClick={() => router.push("/kyc")}
@@ -160,7 +147,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Heading */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-lg sm:text-xl font-mono text-white">Dashboard</h1>
@@ -180,7 +166,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <MetricCard
               label="Total Balance"
@@ -206,13 +191,10 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Chart */}
           <div className="bg-[#201710] border border-[#2e2520] p-4 rounded-lg">
             <div className="mb-3 text-sm text-[#c8b8a8] font-mono">Portfolio Value</div>
             <Chart />
           </div>
-
-          {/* Lower grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
               <TopOpportunities kycStatus={metrics.kycStatus} />

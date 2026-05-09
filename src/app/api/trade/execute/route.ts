@@ -19,7 +19,6 @@ export async function POST(req: Request) {
         const body = await req.json()
         const { chainId: chainIdRaw, pairId, side, amount, slippageBps } = body
 
-        // ── Validation ──────────────────────────────────────────────────────────
         const chainId = parseInt(chainIdRaw, 10) as SupportedChainId
         if (!isSupportedChain(chainId)) {
             return NextResponse.json({ error: `Unsupported chain: ${chainIdRaw}` }, { status: 400 })
@@ -78,7 +77,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Failed to create order record' }, { status: 500 })
         }
 
-        // ── Execute swap ────────────────────────────────────────────────────────
         let result
         try {
             result = await executeTrade({
@@ -90,7 +88,6 @@ export async function POST(req: Request) {
                 slippageBps: slippageBps ?? Math.round(pair.defaultSlippage * 10000),
             })
         } catch (err) {
-            // Mark order as failed
             await adminClient
                 .from('orders')
                 .update({ status: 'failed', updated_at: new Date().toISOString() })
@@ -99,7 +96,6 @@ export async function POST(req: Request) {
             throw err
         }
 
-        // ── Update order to filled ──────────────────────────────────────────────
         await adminClient
             .from('orders')
             .update({

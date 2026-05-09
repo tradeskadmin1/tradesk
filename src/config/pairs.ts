@@ -1,23 +1,17 @@
 import type { SupportedChainId } from './chains'
 
 export interface TradingPair {
-  id: string               // e.g. 'ETH_USDC'
-  base: string             // base token symbol
-  quote: string            // quote token symbol
-  label: string            // display label e.g. 'ETH / USDC'
+  id: string
+  base: string
+  quote: string
+  label: string
   supportedChains: SupportedChainId[]
-  // Minimum trade size in quote token units (human-readable)
   minTradeSize: number
-  // Default slippage tolerance (0.005 = 0.5%)
   defaultSlippage: number
-  // Whether this pair is active — set false to delist without deleting config
   active: boolean
 }
 
-/**
- * Top 10 trading pairs for v1.
- * To add a new pair: append an entry here. No other code changes required.
- */
+
 export const TRADING_PAIRS: TradingPair[] = [
   {
     id: 'ETH_USDC',

@@ -7,11 +7,11 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 interface BalanceRow {
-  id:           string
+  id: string
   token_symbol: string
-  balance:      string
-  chain_id:     number
-  updated_at:   string
+  balance: string
+  chain_id: number
+  updated_at: string
 }
 
 interface BalancesByChain {
@@ -19,18 +19,18 @@ interface BalancesByChain {
 }
 
 const CHAIN_LABEL: Record<number, { name: string; color: string; symbol: string }> = {
-  1:     { name: "Ethereum",  color: "#627eea", symbol: "ETH" },
-  56:    { name: "BNB Chain", color: "#F0B90B", symbol: "BNB" },
-  42161: { name: "Arbitrum",  color: "#28a0f0", symbol: "ARB" },
+  1: { name: "Ethereum", color: "#627eea", symbol: "ETH" },
+  56: { name: "BNB Chain", color: "#F0B90B", symbol: "BNB" },
+  42161: { name: "Arbitrum", color: "#28a0f0", symbol: "ARB" },
 }
 
 export default function PortfolioPage() {
   const router = useRouter()
 
-  const [balances,   setBalances]   = useState<BalancesByChain>({})
-  const [loading,    setLoading]    = useState(true)
+  const [balances, setBalances] = useState<BalancesByChain>({})
+  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt,  setUpdatedAt]  = useState<string | null>(null)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   const loadBalances = useCallback(async (refresh = false) => {
     const url = refresh ? "/api/balances?refresh=true" : "/api/balances"
@@ -69,8 +69,6 @@ export default function PortfolioPage() {
       <div className="flex">
         <Sidebar />
         <div className="flex-1 p-5 space-y-5 overflow-auto">
-
-          {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-xl font-mono text-white">Portfolio</h1>
@@ -87,8 +85,8 @@ export default function PortfolioPage() {
               {refreshing ? (
                 <>
                   <span className="flex gap-1">
-                    {[0,1,2].map((i) => (
-                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i * 0.12}s` }} />
                     ))}
                   </span>
                   Syncing...
@@ -99,7 +97,7 @@ export default function PortfolioPage() {
 
           {loading ? (
             <div className="flex flex-col gap-4">
-              {[1,2,3].map((i) => (
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="h-32 rounded-xl bg-[#1a1410] animate-pulse" />
               ))}
             </div>
@@ -121,12 +119,11 @@ export default function PortfolioPage() {
             <div className="flex flex-col gap-4">
               {chainIds.map((cid) => {
                 const chainInfo = CHAIN_LABEL[cid]
-                const rows      = balances[cid] ?? []
-                const nonZero   = rows.filter((b) => parseFloat(b.balance) > 0)
+                const rows = balances[cid] ?? []
+                const nonZero = rows.filter((b) => parseFloat(b.balance) > 0)
 
                 return (
                   <div key={cid} className="bg-[#1a1410] border border-[#2e2520] rounded-xl overflow-hidden">
-                    {/* Chain header */}
                     <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2e2520]">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center"
@@ -140,13 +137,12 @@ export default function PortfolioPage() {
                       </div>
                     </div>
 
-                    {/* Balance rows */}
                     {rows.length === 0 ? (
                       <div className="px-5 py-4 font-mono text-[12px] text-[#4a3a2a]">No balances found</div>
                     ) : (
                       <div className="divide-y divide-[#2e2520]">
                         {rows.map((b) => {
-                          const bal     = parseFloat(b.balance)
+                          const bal = parseFloat(b.balance)
                           const hasValue = bal > 0
                           return (
                             <div key={b.id} className={`flex items-center justify-between px-5 py-3 ${!hasValue ? "opacity-30" : ""}`}>
@@ -173,7 +169,6 @@ export default function PortfolioPage() {
             </div>
           )}
 
-          {/* Deposit CTA */}
           <div className="bg-[#1e1208] border border-[#FF5733]/10 rounded-xl px-5 py-4 flex items-center justify-between">
             <div>
               <div className="font-mono text-[13px] text-white">Fund your portfolio</div>

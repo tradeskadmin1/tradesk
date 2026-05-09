@@ -77,7 +77,6 @@ export default function TopOpportunities({ kycStatus }: { kycStatus?: string }) 
 
   return (
     <div className="bg-[#201710] border border-[#2e2520] p-4 rounded-lg">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm text-[#c8b8a8]">Top Opportunities</h3>
@@ -119,7 +118,6 @@ export default function TopOpportunities({ kycStatus }: { kycStatus?: string }) 
         </div>
       </div>
 
-      {/* Rows */}
       {loading ? (
         <div className="flex flex-col gap-2.5 py-2">
           {[1,2,3].map((i) => (

@@ -20,7 +20,6 @@ export async function createSupabaseServerClient() {
                             cookieStore.set(name, value, options),
                         )
                     } catch {
-                        // setAll called from a Server Component — cookies are read-only, safe to ignore
                     }
                 },
             },

@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Prevent Next.js from bundling these packages server-side — let Node.js
-  // require them natively. Fixes the viem/ox "critical dependency" webpack
-  // warning caused by dynamic requires inside viem's chain definitions.
   serverExternalPackages: ['viem', 'ox', '@aws-sdk/client-kms'],
 
   serverRuntimeConfig: {

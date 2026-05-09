@@ -93,18 +93,18 @@ CREATE TABLE IF NOT EXISTS public.orders (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id            UUID NOT NULL REFERENCES auth.users(id),
   chain_id           INTEGER NOT NULL,
-  pair               TEXT NOT NULL,         -- e.g. 'ETH_USDC'
+  pair               TEXT NOT NULL,
   base_token         TEXT NOT NULL,
   quote_token        TEXT NOT NULL,
   side               TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
   order_type         TEXT NOT NULL CHECK (order_type IN ('market', 'limit')),
   amount             NUMERIC(36, 18) NOT NULL,
-  price              NUMERIC(36, 18),        -- NULL for market orders
+  price              NUMERIC(36, 18),
   filled_amount      NUMERIC(36, 18) NOT NULL DEFAULT 0,
   status             TEXT NOT NULL DEFAULT 'pending'
                      CHECK (status IN ('pending', 'open', 'filled', 'cancelled', 'failed')),
   tx_hash            TEXT,
-  dex_used           TEXT,                   -- aggregator/DEX that executed the trade
+  dex_used           TEXT,   
   gas_used           NUMERIC,
   slippage_tolerance NUMERIC(6, 4) NOT NULL DEFAULT 0.005,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),

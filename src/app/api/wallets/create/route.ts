@@ -13,23 +13,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Parse optional profile fields sent from onboarding
         let fullName: string | undefined
         let email: string | undefined
         try {
             const body = await req.json()
             fullName = body.fullName
-            email    = body.email
+            email = body.email
         } catch {
-            // Body is optional — wallet-only calls won't send it
         }
 
-        // ── Mark onboarded via RPC (bypasses PostgREST schema cache) ─────────────
         const adminClient = createSupabaseAdminClient()
         const { error: rpcErr } = await adminClient.rpc('mark_user_onboarded', {
-            p_user_id:   user.id,
-            p_email:     email     ?? user.email ?? null,
-            p_full_name: fullName  ?? null,
+            p_user_id: user.id,
+            p_email: email ?? user.email ?? null,
+            p_full_name: fullName ?? null,
         })
 
         if (rpcErr) {
@@ -38,14 +35,12 @@ export async function POST(req: Request) {
             console.log('[POST /api/wallets/create] User marked as onboarded:', user.id)
         }
 
-        // ── Wallet creation (non-fatal) ─────────────────────────────────────────
         let wallets: { chainId: number; address: string }[] = []
         try {
             const created = await createWalletsForUser(user.id)
             wallets = created.map((w) => ({ chainId: w.chainId, address: w.address }))
         } catch (walletErr) {
             console.error('[POST /api/wallets/create] Wallet creation error:', walletErr)
-            // Non-fatal — user is already onboarded; wallets can be created later
         }
 
         return NextResponse.json({ success: true, wallets })

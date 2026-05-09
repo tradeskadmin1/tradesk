@@ -23,7 +23,6 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { chainId: chainIdRaw, tokenSymbol, amount, toAddress } = body
 
-    // ── Input validation ───────────────────────────────────────────────────
     const chainId = parseInt(chainIdRaw, 10) as SupportedChainId
     if (!isSupportedChain(chainId)) {
       return NextResponse.json({ error: `Unsupported chain: ${chainIdRaw}` }, { status: 400 })
@@ -45,7 +44,6 @@ export async function POST(req: Request) {
 
     const adminClient = createSupabaseAdminClient() as any
 
-    // ── Verify wallet belongs to user ──────────────────────────────────────
     const { data: wallet, error: walletError } = await adminClient
       .from('custodial_wallets')
       .select('id, address')
@@ -57,7 +55,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Wallet not found for this chain' }, { status: 404 })
     }
 
-    // ── Check ledger balance ───────────────────────────────────────────────
     const rawTokenAddress = TOKENS[tokenSymbol].addresses[chainId] ?? ''
     const ledgerTokenAddress = rawTokenAddress === NATIVE_TOKEN_ADDRESS
       ? LEDGER_NATIVE_ADDRESS
@@ -76,7 +73,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // ── Estimate fee (from hot wallet address) ─────────────────────────────
     const hotAddress = await getPlatformAddress(chainId)
     const { feeEth } = await estimateWithdrawalFee(
       chainId,
@@ -86,7 +82,6 @@ export async function POST(req: Request) {
       amount,
     )
 
-    // ── Create pending withdrawal record ───────────────────────────────────
     const { data: withdrawal, error: insertError } = await adminClient
       .from('withdrawals')
       .insert({
@@ -107,7 +102,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to create withdrawal record' }, { status: 500 })
     }
 
-    // ── Execute on-chain ───────────────────────────────────────────────────
     const result = await executeWithdrawal({
       userId: user.id,
       walletId: wallet.id,
@@ -129,7 +123,6 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : 'Withdrawal failed'
     console.error('[POST /api/withdraw]', err)
 
-    // Mark withdrawal as failed if it was created
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -147,7 +140,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
-    // ── Status lookup ──────────────────────────────────────────────────────
     if (id) {
       const adminClient = createSupabaseAdminClient() as any
       const { data, error } = await adminClient
@@ -164,7 +156,7 @@ export async function GET(req: Request) {
       return NextResponse.json(data)
     }
 
-    // ── Fee estimation ─────────────────────────────────────────────────────
+
     const chainIdParam = searchParams.get('chainId')
     const tokenSymbol = searchParams.get('token')
     const amount = searchParams.get('amount')

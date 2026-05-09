@@ -10,7 +10,7 @@ const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
 const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-// ── Payload types ─────────────────────────────────────────────────────────────
+
 interface AlchemyActivity {
     category: 'external' | 'internal' | 'token'
     fromAddress: string
@@ -19,8 +19,8 @@ interface AlchemyActivity {
     asset: string
     rawContract?: {
         address: string
-        decimal: string   // hex e.g. "0x6"
-        rawValue: string   // hex wei
+        decimal: string
+        rawValue: string
     }
     hash: string
     blockNum: string
@@ -38,7 +38,6 @@ interface AlchemyWebhookPayload {
     }
 }
 
-// ── Signature verification ────────────────────────────────────────────────────
 function verifySignature(
     rawBody: string,
     signature: string | null,
@@ -47,7 +46,7 @@ function verifySignature(
     const secret = process.env[secretEnvKey]
     if (!secret) {
         console.warn(`[webhook/alchemy] ${secretEnvKey} not set — skipping verification`)
-        return true   // allow in local dev without secrets configured
+        return true
     }
     if (!signature) return false
 
@@ -58,7 +57,7 @@ function verifySignature(
     return digest === signature
 }
 
-// ── DB helpers ────────────────────────────────────────────────────────────────
+
 async function findUserByDepositAddress(
     address: string,
     chainId: SupportedChainId,
@@ -126,7 +125,7 @@ async function recordDeposit(params: {
     if (error) console.error('[webhook/alchemy] recordDeposit error:', error)
 }
 
-// ── Process one activity entry ────────────────────────────────────────────────
+
 async function processActivity(
     activity: AlchemyActivity,
     chainId: SupportedChainId,
@@ -137,7 +136,7 @@ async function processActivity(
     if (!recipient) return
 
     const userId = await findUserByDepositAddress(recipient, chainId)
-    if (!userId) return  // not one of our deposit addresses
+    if (!userId) return
 
     const isNative = category === 'external' || category === 'internal'
     const tokenAddr = isNative
@@ -149,7 +148,6 @@ async function processActivity(
         return
     }
 
-    // Decode human-readable amount
     let amountDecimal: string
     if (isNative) {
         amountDecimal = String(value)
@@ -169,7 +167,6 @@ async function processActivity(
 
     const walletId = await getWalletId(userId, chainId)
 
-    // 1. Credit ledger (atomic)
     await creditBalance({
         userId,
         chainId,
@@ -181,7 +178,6 @@ async function processActivity(
         note: `Deposit from ${fromAddress}`,
     })
 
-    // 2. Record deposit row
     if (walletId) {
         await recordDeposit({
             userId,
@@ -195,7 +191,6 @@ async function processActivity(
         })
     }
 
-    // 3. Sweep (fire-and-forget)
     if (isNative) {
         sweepNative({ userId, chainId, txHash }).catch((err) =>
             console.error(`[webhook/alchemy] sweepNative failed tx=${txHash}:`, err),
@@ -214,7 +209,7 @@ async function processActivity(
     }
 }
 
-// ── Main handler (called by each chain route) ─────────────────────────────────
+
 export async function handleAlchemyWebhook(
     req: NextRequest,
     secretEnvKey: string,
@@ -239,8 +234,6 @@ export async function handleAlchemyWebhook(
         return NextResponse.json({ ok: true })
     }
 
-    // Double-check the payload's network matches this route's chain
-    // (guards against misconfigured webhooks sending to the wrong URL)
     const { activity } = payload.event
 
     await Promise.allSettled(

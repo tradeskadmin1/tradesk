@@ -8,20 +8,20 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 const CHAINS = [
-  { id: 1,     name: "Ethereum",  color: "#627eea", symbol: "ETH",  tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
-  { id: 56,    name: "BNB Chain", color: "#F0B90B", symbol: "BNB",  tokens: ["BNB", "USDT", "USDC"] },
-  { id: 42161, name: "Arbitrum",  color: "#28a0f0", symbol: "ARB",  tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { id: 1, name: "Ethereum", color: "#627eea", symbol: "ETH", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
+  { id: 56, name: "BNB Chain", color: "#F0B90B", symbol: "BNB", tokens: ["BNB", "USDT", "USDC"] },
+  { id: 42161, name: "Arbitrum", color: "#28a0f0", symbol: "ARB", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
 ] as const
 
 export default function DepositPage() {
   const router = useRouter()
 
-  const [kycStatus,     setKycStatus]     = useState<string | null>(null)
+  const [kycStatus, setKycStatus] = useState<string | null>(null)
   const [selectedChain, setSelectedChain] = useState<number>(1)
-  const [address,       setAddress]       = useState<string | null>(null)
-  const [loading,       setLoading]       = useState(false)
-  const [copied,        setCopied]        = useState(false)
-  const [showQr,        setShowQr]        = useState(false)
+  const [address, setAddress] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [showQr, setShowQr] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -39,7 +39,6 @@ export default function DepositPage() {
       if (status === "approved") fetchAddress(selectedChain)
     }
     init()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const fetchAddress = async (chainId: number) => {
@@ -84,7 +83,6 @@ export default function DepositPage() {
             <p className="font-mono text-[12px] text-[#7a6a5a]">Send tokens to your custodial wallet address</p>
           </div>
 
-          {/* KYC gate — shown until approved */}
           {kycStatus !== null && kycStatus !== "approved" && (
             <div className="flex flex-col items-center gap-5 py-10 text-center">
               <div className="w-16 h-16 rounded-full bg-[#FF5733]/10 border border-[#FF5733]/30 flex items-center justify-center text-3xl">🪪</div>
@@ -96,8 +94,8 @@ export default function DepositPage() {
                   {kycStatus === "pending"
                     ? "Your documents are being reviewed. Deposits will be unlocked once approved."
                     : kycStatus === "rejected"
-                    ? "Your verification was rejected. Resubmit your documents to unlock deposits."
-                    : "You need to verify your identity before you can deposit funds. It only takes ~2 minutes."}
+                      ? "Your verification was rejected. Resubmit your documents to unlock deposits."
+                      : "You need to verify your identity before you can deposit funds. It only takes ~2 minutes."}
                 </div>
               </div>
               {kycStatus !== "pending" && (
@@ -111,10 +109,8 @@ export default function DepositPage() {
             </div>
           )}
 
-          {/* Deposit form — only when KYC approved */}
           {kycStatus === "approved" && (
             <>
-              {/* Chain selector */}
               <div className="flex flex-col gap-2">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Select Network</label>
                 <div className="flex flex-col gap-2">
@@ -142,10 +138,7 @@ export default function DepositPage() {
                 </div>
               </div>
 
-              {/* Address card */}
               <div className="bg-[#1a1410] border border-[#2e2520] rounded-xl p-5 space-y-4">
-
-                {/* Card header */}
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[12px] text-white font-bold">{chain.name} Deposit Address</span>
                   <div className="flex items-center gap-1.5" style={{ color: chain.color }}>
@@ -158,24 +151,21 @@ export default function DepositPage() {
                   <div className="h-12 rounded-lg bg-[#2a1a14] animate-pulse" />
                 ) : address ? (
                   <>
-                    {/* Toggle tabs */}
                     <div className="flex gap-2">
                       {(["address", "qr"] as const).map((tab) => (
                         <button
                           key={tab}
                           onClick={() => setShowQr(tab === "qr")}
-                          className={`flex-1 py-2 rounded-lg font-mono text-[11px] font-bold border transition-all cursor-pointer ${
-                            (tab === "qr") === showQr
+                          className={`flex-1 py-2 rounded-lg font-mono text-[11px] font-bold border transition-all cursor-pointer ${(tab === "qr") === showQr
                               ? "border-[#FF5733]/50 bg-[#FF5733]/10 text-[#FF5733]"
                               : "border-[#2e2520] text-[#7a6a5a] hover:border-[#4a3a2a] hover:text-white"
-                          }`}
+                            }`}
                         >
                           {tab === "address" ? "📋 Address" : "⬛ QR Code"}
                         </button>
                       ))}
                     </div>
 
-                    {/* Address view */}
                     {!showQr && (
                       <>
                         <div className="bg-[#120d08] border border-[#2e2520] rounded-xl px-4 py-3.5 font-mono text-[13px] text-white break-all leading-relaxed">
@@ -183,18 +173,16 @@ export default function DepositPage() {
                         </div>
                         <button
                           onClick={copy}
-                          className={`w-full py-3 rounded-xl font-mono text-[13px] font-bold transition-all cursor-pointer ${
-                            copied
+                          className={`w-full py-3 rounded-xl font-mono text-[13px] font-bold transition-all cursor-pointer ${copied
                               ? "bg-emerald-500 text-white"
                               : "bg-[#FF5733] hover:bg-[#ff6a4d] text-white hover:-translate-y-0.5"
-                          }`}
+                            }`}
                         >
                           {copied ? "✓ Copied!" : "Copy Address"}
                         </button>
                       </>
                     )}
 
-                    {/* QR view */}
                     {showQr && (
                       <div className="flex flex-col items-center gap-4">
                         <div className="p-4 bg-white rounded-2xl shadow-lg">
@@ -213,11 +201,10 @@ export default function DepositPage() {
                         </div>
                         <button
                           onClick={copy}
-                          className={`w-full py-3 rounded-xl font-mono text-[13px] font-bold transition-all cursor-pointer ${
-                            copied
+                          className={`w-full py-3 rounded-xl font-mono text-[13px] font-bold transition-all cursor-pointer ${copied
                               ? "bg-emerald-500 text-white"
                               : "border border-[#2e2520] text-[#7a6a5a] hover:text-white hover:border-white/20"
-                          }`}
+                            }`}
                         >
                           {copied ? "✓ Copied!" : "Copy Address"}
                         </button>
@@ -231,7 +218,6 @@ export default function DepositPage() {
                 )}
               </div>
 
-              {/* Instructions */}
               <div className="bg-[#1e1208] border border-[#FF5733]/10 rounded-xl p-5 space-y-3">
                 <div className="font-mono text-[11px] text-[#FF5733] uppercase tracking-widest">Important</div>
                 <div className="flex flex-col gap-2.5">
@@ -249,7 +235,6 @@ export default function DepositPage() {
                 </div>
               </div>
 
-              {/* View history */}
               <button
                 onClick={() => router.push("/dashboard/portfolio")}
                 className="w-full py-3 rounded-xl border border-[#2e2520] font-mono text-[13px] text-[#7a6a5a] hover:text-white hover:border-white/20 transition-all cursor-pointer"

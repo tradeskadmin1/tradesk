@@ -84,7 +84,7 @@ export async function createWalletsForUser(userId: string): Promise<WalletRecord
 
         const { privateKey, path } = derivePrivateKey(mnemonic, chainId, accountIndex)
         const account = privateKeyToAccount(privateKey as `0x${string}`)
-        const address = account.address.toLowerCase()  // store lowercase for consistent webhook lookups
+        const address = account.address.toLowerCase()
         const { encryptedPrivateKey, encryptedDek } = await encryptPrivateKey(privateKey)
         const { data: inserted, error } = await supabase
             .from('custodial_wallets')

@@ -1,6 +1,6 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
-import {KMSClient, EncryptCommand, DecryptCommand} from '@aws-sdk/client-kms'
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms'
 
 let _kmsClient: KMSClient | null = null
 
@@ -22,15 +22,14 @@ const KMS_KEY_ID = () => {
     return id
 }
 
-// ── AES-256-GCM helpers ────────────────────────────────────────────────────
+
 
 function aesEncrypt(plaintext: string, key: Buffer): string {
-    const iv = randomBytes(12)                       // 96-bit IV for GCM
+    const iv = randomBytes(12)
     const cipher = createCipheriv('aes-256-gcm', key, iv)
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-    const authTag = cipher.getAuthTag()                   // 128-bit auth tag
+    const authTag = cipher.getAuthTag()
 
-    // Format: base64(iv + authTag + ciphertext)
     return Buffer.concat([iv, authTag, encrypted]).toString('base64')
 }
 
@@ -55,14 +54,8 @@ export interface EncryptedKey {
 
 export async function encryptPrivateKey(privateKey: string): Promise<EncryptedKey> {
     const kms = getKMSClient()
-
-    // 1. Generate a random 256-bit DEK
     const dek = randomBytes(32)
-
-    // 2. Encrypt the private key locally with the DEK
     const encryptedPrivateKey = aesEncrypt(privateKey, dek)
-
-    // 3. Encrypt the DEK with KMS
     const { CiphertextBlob } = await kms.send(
         new EncryptCommand({
             KeyId: KMS_KEY_ID(),

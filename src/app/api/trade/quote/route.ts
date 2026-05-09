@@ -22,7 +22,6 @@ export async function GET(req: Request) {
         const side = searchParams.get('side')
         const amount = searchParams.get('amount')
 
-        // ── Validation ─────────────────────────────────────────────────────────
         if (!chainIdParam || !pairId || !side || !amount) {
             return NextResponse.json(
                 { error: 'chainId, pairId, side and amount are required' },
@@ -58,7 +57,6 @@ export async function GET(req: Request) {
             )
         }
 
-        // ── Get taker address (user's custodial wallet) ─────────────────────────
         const adminClient = createSupabaseAdminClient() as any
         const { data: wallet } = await adminClient
             .from('custodial_wallets')

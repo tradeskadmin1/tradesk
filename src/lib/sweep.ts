@@ -1,4 +1,4 @@
-import {createWalletClient, createPublicClient, http, parseEther, formatUnits, parseUnits, type Address } from 'viem'
+import { createWalletClient, createPublicClient, http, parseEther, formatUnits, parseUnits, type Address } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { decryptPrivateKey } from './kms'
 import { getPlatformWalletClient } from './platform-wallet'
@@ -8,28 +8,25 @@ import { CHAIN_CONFIG, type SupportedChainId } from '@/config/chains'
 
 const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
-// ── ERC-20 minimal ABI ────────────────────────────────────────────────────────
 const ERC20_ABI = [
     {
         name: 'transfer',
         type: 'function',
         stateMutability: 'nonpayable',
-        inputs:  [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }],
+        inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }],
         outputs: [{ name: '', type: 'bool' }],
     },
     {
         name: 'balanceOf',
         type: 'function',
         stateMutability: 'view',
-        inputs:  [{ name: 'account', type: 'address' }],
+        inputs: [{ name: 'account', type: 'address' }],
         outputs: [{ name: '', type: 'uint256' }],
     },
 ] as const
 
-// Minimum native balance left in a user wallet after sweep (covers future gas)
 const DUST_THRESHOLD_ETH = parseEther('0.0001')
 
-// ── Load user wallet client ───────────────────────────────────────────────────
 async function getUserWalletClient(userId: string, chainId: SupportedChainId) {
     const supabase = createSupabaseAdminClient()
     const { data, error } = await supabase
@@ -42,9 +39,9 @@ async function getUserWalletClient(userId: string, chainId: SupportedChainId) {
     if (error || !data) throw new Error(`[sweep] Wallet not found for user ${userId} chain ${chainId}`)
 
     const privateKey = await decryptPrivateKey(data.encrypted_private_key, data.encrypted_dek)
-    const cfg        = CHAIN_CONFIG[chainId]
-    const rpcUrl     = process.env[cfg.rpcEnvKey] ?? cfg.publicRpcFallback
-    const account    = privateKeyToAccount(privateKey as `0x${string}`)
+    const cfg = CHAIN_CONFIG[chainId]
+    const rpcUrl = process.env[cfg.rpcEnvKey] ?? cfg.publicRpcFallback
+    const account = privateKeyToAccount(privateKey as `0x${string}`)
 
     const walletClient = createWalletClient({ account, chain: cfg.chain, transport: http(rpcUrl) })
     const publicClient = createPublicClient({ chain: cfg.chain, transport: http(rpcUrl) })
@@ -54,9 +51,9 @@ async function getUserWalletClient(userId: string, chainId: SupportedChainId) {
 
 
 export async function sweepNative(params: {
-    userId:    string
-    chainId:   SupportedChainId
-    txHash:    string
+    userId: string
+    chainId: SupportedChainId
+    txHash: string
 }): Promise<string | null> {
     const { userId, chainId, txHash } = params
 
@@ -74,7 +71,7 @@ export async function sweepNative(params: {
 
         const gasPrice = await publicClient.getGasPrice()
         const gasLimit = BigInt(21_000)
-        const gasCost  = gasPrice * gasLimit
+        const gasCost = gasPrice * gasLimit
         const sweepAmt = balance - gasCost
 
         if (sweepAmt <= BigInt(0)) {
@@ -83,20 +80,19 @@ export async function sweepNative(params: {
         }
 
         const sweepTxHash = await walletClient.sendTransaction({
-            to:       hotAddress as Address,
-            value:    sweepAmt,
-            gas:      gasLimit,
+            to: hotAddress as Address,
+            value: sweepAmt,
+            gas: gasLimit,
             gasPrice,
         })
 
         console.log(`[sweep] Native sweep chain ${chainId}: ${userAddress} → ${hotAddress}  ${formatUnits(sweepAmt, 18)} | sweep tx: ${sweepTxHash}`)
 
-        // Check if hot wallet now exceeds the retain threshold → drain to cold
         maybeDrainToCold({
             chainId,
             tokenAddress: '0x0000000000000000000000000000000000000000',
-            tokenSymbol:  chainId === 56 ? 'BNB' : 'ETH',
-            decimals:     18,
+            tokenSymbol: chainId === 56 ? 'BNB' : 'ETH',
+            decimals: 18,
         }).catch((err) => console.error('[sweep] cold drain failed:', err))
 
         return sweepTxHash
@@ -107,34 +103,33 @@ export async function sweepNative(params: {
 }
 
 export async function sweepERC20(params: {
-    userId:       string
-    chainId:      SupportedChainId
+    userId: string
+    chainId: SupportedChainId
     tokenAddress: string
-    tokenSymbol:  string
-    decimals:     number
-    txHash:       string
+    tokenSymbol: string
+    decimals: number
+    txHash: string
 }): Promise<string | null> {
     const { userId, chainId, tokenAddress, txHash } = params
 
     try {
         const {
-            walletClient:  userWallet,
+            walletClient: userWallet,
             publicClient,
-            address:       userAddress,
+            address: userAddress,
         } = await getUserWalletClient(userId, chainId)
 
         const {
-            walletClient:  hotWallet,
-            publicClient:  _hotPub,
-            address:       hotAddress,
+            walletClient: hotWallet,
+            publicClient: _hotPub,
+            address: hotAddress,
         } = await getPlatformWalletClient(chainId)
 
-        // 1. Check token balance
         const tokenBalance = await publicClient.readContract({
-            address:      tokenAddress as Address,
-            abi:          ERC20_ABI,
+            address: tokenAddress as Address,
+            abi: ERC20_ABI,
             functionName: 'balanceOf',
-            args:         [userAddress],
+            args: [userAddress],
         }) as bigint
 
         if (tokenBalance === BigInt(0)) {
@@ -142,17 +137,15 @@ export async function sweepERC20(params: {
             return null
         }
 
-        // 2. Estimate gas for ERC-20 transfer
         const gasPrice = await publicClient.getGasPrice()
         const gasLimit = await publicClient.estimateGas({
             account: userAddress,
-            to:      tokenAddress as Address,
-            data:    encodeFunctionData(hotAddress as Address, tokenBalance),
-        }).catch(() => BigInt(80_000))  // fallback if estimate fails
+            to: tokenAddress as Address,
+            data: encodeFunctionData(hotAddress as Address, tokenBalance),
+        }).catch(() => BigInt(80_000))
 
         const gasCost = gasPrice * gasLimit
 
-        // 3. Check if user has enough native for gas — if not, fund from hot wallet
         const nativeBalance = await publicClient.getBalance({ address: userAddress })
 
         if (nativeBalance < gasCost) {
@@ -160,32 +153,29 @@ export async function sweepERC20(params: {
             console.log(`[sweep] Pre-funding ${userAddress} with ${formatUnits(fundAmount, 18)} native for gas`)
 
             const fundTxHash = await hotWallet.sendTransaction({
-                to:    userAddress,
+                to: userAddress,
                 value: fundAmount,
             })
 
-            // Wait for funding tx to be mined
             await publicClient.waitForTransactionReceipt({ hash: fundTxHash })
         }
 
-        // 4. Transfer ERC-20 from user to hot wallet
         const sweepTxHash = await userWallet.writeContract({
-            address:      tokenAddress as Address,
-            abi:          ERC20_ABI,
+            address: tokenAddress as Address,
+            abi: ERC20_ABI,
             functionName: 'transfer',
-            args:         [hotAddress as Address, tokenBalance],
-            gas:          gasLimit,
+            args: [hotAddress as Address, tokenBalance],
+            gas: gasLimit,
             gasPrice,
         })
 
         console.log(`[sweep] ERC-20 sweep chain ${chainId}: ${params.tokenSymbol} ${userAddress} → ${hotAddress} | sweep tx: ${sweepTxHash}`)
 
-        // Check if hot wallet now exceeds the retain threshold → drain to cold
         maybeDrainToCold({
             chainId,
             tokenAddress: tokenAddress.toLowerCase(),
-            tokenSymbol:  params.tokenSymbol,
-            decimals:     params.decimals,
+            tokenSymbol: params.tokenSymbol,
+            decimals: params.decimals,
         }).catch((err) => console.error('[sweep] cold drain failed:', err))
 
         return sweepTxHash
@@ -195,11 +185,10 @@ export async function sweepERC20(params: {
     }
 }
 
-// ── Minimal ABI encoder for transfer(address,uint256) ────────────────────────
+
 function encodeFunctionData(to: Address, amount: bigint): `0x${string}` {
-    // transfer(address,uint256) selector = 0xa9059cbb
-    const selector   = 'a9059cbb'
-    const paddedTo   = to.slice(2).toLowerCase().padStart(64, '0')
-    const paddedAmt  = amount.toString(16).padStart(64, '0')
+    const selector = 'a9059cbb'
+    const paddedTo = to.slice(2).toLowerCase().padStart(64, '0')
+    const paddedAmt = amount.toString(16).padStart(64, '0')
     return `0x${selector}${paddedTo}${paddedAmt}`
 }

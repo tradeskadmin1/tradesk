@@ -16,7 +16,7 @@ export interface TokenBalance {
     balanceRaw: bigint
 }
 
-// ── On-chain reads ─────────────────────────────────────────────────────────
+
 
 export async function fetchNativeBalance(
     address: `0x${string}`,
@@ -40,7 +40,6 @@ export async function fetchERC20Balance(
     }) as Promise<bigint>
 }
 
-// ── Full balance sync ──────────────────────────────────────────────────────
 
 
 export async function syncWalletBalances(
@@ -53,7 +52,7 @@ export async function syncWalletBalances(
 
     for (const [symbol, token] of Object.entries(TOKENS)) {
         const tokenAddress = token.addresses[chainId]
-        if (!tokenAddress) continue   // token not available on this chain
+        if (!tokenAddress) continue
 
         let balanceRaw: bigint
 
@@ -68,7 +67,6 @@ export async function syncWalletBalances(
                 )
             }
         } catch {
-            // RPC error for this token — skip and continue
             continue
         }
 

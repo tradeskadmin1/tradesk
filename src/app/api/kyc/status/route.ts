@@ -15,14 +15,12 @@ export async function GET(req: Request) {
 
         const adminClient = createSupabaseAdminClient()
 
-        // User's overall KYC status from the users table
         const { data: userData } = await adminClient
             .from('users')
             .select('kyc_status, kyc_submitted_at')
             .eq('id', user.id)
             .single()
 
-        // Latest submission details (without sensitive document URLs)
         const { data: submission } = await adminClient
             .from('kyc_submissions')
             .select('id, status, full_name, nationality, id_type, submitted_at, reviewed_at')

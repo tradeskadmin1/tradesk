@@ -7,39 +7,37 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 const CHAINS = [
-  { id: 1,     name: "Ethereum",  color: "#627eea", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
-  { id: 56,    name: "BNB Chain", color: "#F0B90B", tokens: ["BNB", "USDT", "USDC"] },
-  { id: 42161, name: "Arbitrum",  color: "#28a0f0", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { id: 1, name: "Ethereum", color: "#627eea", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
+  { id: 56, name: "BNB Chain", color: "#F0B90B", tokens: ["BNB", "USDT", "USDC"] },
+  { id: 42161, name: "Arbitrum", color: "#28a0f0", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
 ]
 
 interface FeeEstimate {
-  estimatedFee:     string
-  estimatedFeeUsd:  string | null
-  token:            string
-  network:          string
+  estimatedFee: string
+  estimatedFeeUsd: string | null
+  token: string
+  network: string
 }
 
 export default function WithdrawPage() {
   const router = useRouter()
 
-  const [chainId,    setChainId]    = useState(1)
-  const [token,      setToken]      = useState("ETH")
-  const [amount,     setAmount]     = useState("")
-  const [toAddress,  setToAddress]  = useState("")
-  const [feeData,    setFeeData]    = useState<FeeEstimate | null>(null)
+  const [chainId, setChainId] = useState(1)
+  const [token, setToken] = useState("ETH")
+  const [amount, setAmount] = useState("")
+  const [toAddress, setToAddress] = useState("")
+  const [feeData, setFeeData] = useState<FeeEstimate | null>(null)
   const [loadingFee, setLoadingFee] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [success,    setSuccess]    = useState<{ txHash: string; amount: string; token: string } | null>(null)
-  const [confirmed,  setConfirmed]  = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{ txHash: string; amount: string; token: string } | null>(null)
+  const [confirmed, setConfirmed] = useState(false)
 
-  const chain  = CHAINS.find((c) => c.id === chainId)!
+  const chain = CHAINS.find((c) => c.id === chainId)!
   const tokens = chain.tokens
 
-  // Reset token when chain changes
   useEffect(() => {
     if (!tokens.includes(token)) setToken(tokens[0])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chainId])
 
   useEffect(() => {
@@ -50,14 +48,13 @@ export default function WithdrawPage() {
     init()
   }, [router])
 
-  // Estimate fee when inputs change
   useEffect(() => {
     if (!amount || !toAddress || parseFloat(amount) <= 0) { setFeeData(null); return }
     const timer = setTimeout(async () => {
       setLoadingFee(true)
       try {
         const params = new URLSearchParams({ chainId: String(chainId), token, amount, toAddress })
-        const res  = await fetch(`/api/withdraw?${params}`)
+        const res = await fetch(`/api/withdraw?${params}`)
         if (res.ok) setFeeData(await res.json())
         else setFeeData(null)
       } finally {
@@ -73,10 +70,10 @@ export default function WithdrawPage() {
     setError(null)
 
     try {
-      const res  = await fetch("/api/withdraw", {
-        method:  "POST",
+      const res = await fetch("/api/withdraw", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ chainId, tokenSymbol: token, amount, toAddress }),
+        body: JSON.stringify({ chainId, tokenSymbol: token, amount, toAddress }),
       })
       const data = await res.json()
 
@@ -115,7 +112,6 @@ export default function WithdrawPage() {
             <p className="font-mono text-[12px] text-[#7a6a5a]">Transfer tokens from your custodial wallet to any external address</p>
           </div>
 
-          {/* ── Success ── */}
           {success && (
             <div className="bg-[#1a1410] border border-emerald-500/20 rounded-xl p-6 flex flex-col items-center gap-4 text-center">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl">✓</div>
@@ -140,10 +136,8 @@ export default function WithdrawPage() {
             </div>
           )}
 
-          {/* ── Form ── */}
           {!success && (
             <>
-              {/* Network */}
               <div className="flex flex-col gap-2">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Network</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -163,7 +157,6 @@ export default function WithdrawPage() {
                 </div>
               </div>
 
-              {/* Token */}
               <div className="flex flex-col gap-2">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Token</label>
                 <div className="flex flex-wrap gap-2">
@@ -179,7 +172,6 @@ export default function WithdrawPage() {
                 </div>
               </div>
 
-              {/* Amount */}
               <div className="flex flex-col gap-1.5">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Amount</label>
                 <input
@@ -191,7 +183,6 @@ export default function WithdrawPage() {
                 />
               </div>
 
-              {/* Destination */}
               <div className="flex flex-col gap-1.5">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Destination Address</label>
                 <input
@@ -206,14 +197,13 @@ export default function WithdrawPage() {
                 )}
               </div>
 
-              {/* Fee estimate */}
               {(loadingFee || feeData) && (
                 <div className="bg-[#120d08] border border-[#2e2520] rounded-xl overflow-hidden">
                   {loadingFee ? (
                     <div className="flex items-center gap-2 px-4 py-3 font-mono text-[11px] text-[#7a6a5a]">
                       <span className="flex gap-1">
-                        {[0,1,2].map((i) => (
-                          <span key={i} className="w-1 h-1 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i*0.12}s` }} />
+                        {[0, 1, 2].map((i) => (
+                          <span key={i} className="w-1 h-1 rounded-full bg-[#FF5733] animate-bounce" style={{ animationDelay: `${i * 0.12}s` }} />
                         ))}
                       </span>
                       Estimating fee...
@@ -221,9 +211,9 @@ export default function WithdrawPage() {
                   ) : feeData && (
                     <>
                       {[
-                        { label: "Network fee",  value: `${feeData.estimatedFee} ${feeData.token}${feeData.estimatedFeeUsd ? ` (~$${parseFloat(feeData.estimatedFeeUsd).toFixed(2)})` : ""}` },
-                        { label: "You receive",  value: `≈ ${(parseFloat(amount) - parseFloat(feeData.estimatedFee)).toFixed(6)} ${token}` },
-                        { label: "Network",      value: feeData.network },
+                        { label: "Network fee", value: `${feeData.estimatedFee} ${feeData.token}${feeData.estimatedFeeUsd ? ` (~$${parseFloat(feeData.estimatedFeeUsd).toFixed(2)})` : ""}` },
+                        { label: "You receive", value: `≈ ${(parseFloat(amount) - parseFloat(feeData.estimatedFee)).toFixed(6)} ${token}` },
+                        { label: "Network", value: feeData.network },
                       ].map((row, i, arr) => (
                         <div key={row.label} className={`flex justify-between px-4 py-2 font-mono text-[11px] ${i < arr.length - 1 ? "border-b border-[#2e2520]" : ""}`}>
                           <span className="text-[#7a6a5a]">{row.label}</span>
@@ -235,7 +225,6 @@ export default function WithdrawPage() {
                 </div>
               )}
 
-              {/* Confirm checkbox */}
               {isValid && (
                 <label className="flex items-start gap-3 cursor-pointer">
                   <div
@@ -254,14 +243,12 @@ export default function WithdrawPage() {
                 </label>
               )}
 
-              {/* Error */}
               {error && (
                 <div className="bg-[#FF5733]/5 border border-[#FF5733]/20 rounded-xl px-4 py-3 font-mono text-[12px] text-[#FF5733]">
                   ⚠ {error}
                 </div>
               )}
 
-              {/* Submit */}
               <button
                 onClick={submit}
                 disabled={!isValid || !confirmed || submitting}
@@ -270,8 +257,8 @@ export default function WithdrawPage() {
                 {submitting ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="flex gap-1">
-                      {[0,1,2].map((i) => (
-                        <span key={i} className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />
+                      {[0, 1, 2].map((i) => (
+                        <span key={i} className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                       ))}
                     </span>
                     Broadcasting Transaction...

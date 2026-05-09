@@ -19,8 +19,6 @@ export async function POST(req: Request) {
         }
 
         const adminClient = createSupabaseAdminClient()
-
-        // ── Check for existing pending/approved submission ──────────────────────
         const { data: existing } = await adminClient
             .from('kyc_submissions')
             .select('status')
@@ -42,7 +40,6 @@ export async function POST(req: Request) {
             )
         }
 
-        // ── Parse form data ─────────────────────────────────────────────────────
         let formData: FormData
         try {
             formData = await req.formData()
@@ -58,7 +55,6 @@ export async function POST(req: Request) {
         const idBack = formData.get('idBack') as File | null
         const selfie = formData.get('selfie') as File | null
 
-        // ── Validate required fields ─────────────────────────────────────────────
         if (!fullName || !dateOfBirth || !nationality || !idType || !idFront) {
             return NextResponse.json(
                 { error: 'fullName, dateOfBirth, nationality, idType and idFront are required' },
@@ -70,12 +66,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid idType' }, { status: 400 })
         }
 
-        // Validate date format
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
             return NextResponse.json({ error: 'dateOfBirth must be YYYY-MM-DD' }, { status: 400 })
         }
 
-        // ── Validate + upload files ──────────────────────────────────────────────
         async function uploadFile(
             file: File,
             label: string,
@@ -125,7 +119,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: message }, { status: 400 })
         }
 
-        // ── Insert kyc_submissions row ───────────────────────────────────────────
         const { data: submission, error: insertError } = await adminClient
             .from('kyc_submissions')
             .insert({
@@ -149,7 +142,6 @@ export async function POST(req: Request) {
             )
         }
 
-        // ── Mark user as pending ─────────────────────────────────────────────────
         await adminClient
             .from('users')
             .update({

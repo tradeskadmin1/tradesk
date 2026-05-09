@@ -16,26 +16,25 @@ const ZEROX_BASE = 'https://api.0x.org'
 
 const CHAIN_MAP = { 1: mainnet, 56: bsc, 42161: arbitrum } as const
 
-// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface QuoteRequest {
     chainId: SupportedChainId
-    sellToken: string   // symbol e.g. 'ETH'
-    buyToken: string   // symbol e.g. 'USDC'
-    sellAmount?: string   // human-readable e.g. '1.5' — provide sellAmount OR buyAmount
+    sellToken: string
+    buyToken: string
+    sellAmount?: string
     buyAmount?: string
     takerAddress: `0x${string}`
-    slippageBps?: number  // slippage in basis points, default 50 (0.5%)
+    slippageBps?: number
 }
 
 export interface QuoteResponse {
     sellToken: string
     buyToken: string
-    sellAmount: string   // in base units
-    buyAmount: string   // in base units
-    sellAmountHuman: string   // human-readable
-    buyAmountHuman: string   // human-readable
-    price: string   // buy per sell
+    sellAmount: string
+    buyAmount: string
+    sellAmountHuman: string
+    buyAmountHuman: string
+    price: string
     guaranteedPrice: string
     estimatedGas: string
     gasFeeUsd: string | null
@@ -75,7 +74,7 @@ export interface ExecuteTradeResult {
     dexUsed: string
 }
 
-// ── 0x API helpers ─────────────────────────────────────────────────────────
+
 
 function zeroxHeaders(chainId: SupportedChainId): HeadersInit {
     return {
@@ -171,7 +170,6 @@ function parseRoute(data: Record<string, unknown>): RouteStep[] {
     }
 }
 
-// ── ERC-20 approval ────────────────────────────────────────────────────────
 
 const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3' as const
 
@@ -211,7 +209,7 @@ async function ensureERC20Approval(
     await publicClient.waitForTransactionReceipt({ hash: approveTx, timeout: 60_000 })
 }
 
-// ── Trade execution ────────────────────────────────────────────────────────
+
 
 export async function executeTrade(req: ExecuteTradeRequest): Promise<ExecuteTradeResult> {
     const { userId, chainId, sellToken, buyToken, sellAmount, slippageBps = 50 } = req
