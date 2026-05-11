@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getGmxSdk, FUTURES_MARKETS, GMX_ORACLE_URL } from '@/lib/gmx'
+import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        const rl = checkRateLimit(`markets:${clientIp(req)}`, LIMITS.RELAXED)
+        if (!rl.success) return rlResponse(rl.resetAt)
+
         const sdk = await getGmxSdk()
 
         const tickers = await sdk.oracle.getTickers()

@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getAllPrices, get24hTicker, getKlines } from '@/lib/price'
 import { ACTIVE_PAIRS } from '@/config/pairs'
+import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
 
 export async function GET(req: Request) {
     try {
+        const rl = checkRateLimit(`prices:${clientIp(req)}`, LIMITS.RELAXED)
+        if (!rl.success) return rlResponse(rl.resetAt)
+
         const { searchParams } = new URL(req.url)
         const pairId = searchParams.get('pairId')
         const type = searchParams.get('type') ?? 'price'

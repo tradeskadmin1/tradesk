@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
@@ -17,6 +18,9 @@ export async function POST(req: Request) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+
+        const rl = checkRateLimit(`kyc:submit:${user.id}`, LIMITS.STRICT)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const adminClient = createSupabaseAdminClient()
         const { data: existing } = await adminClient

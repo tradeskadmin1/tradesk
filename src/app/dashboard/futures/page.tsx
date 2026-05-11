@@ -27,6 +27,10 @@ interface Position {
     unrealised_pnl: number
     pnl_pct: number
     created_at: string
+    stop_loss: number | null
+    take_profit: number | null
+    sl_order_id: string | null
+    tp_order_id: string | null
 }
 
 
@@ -59,6 +63,7 @@ function CandleChart({ symbol, period }: { symbol: string; period: string }) {
             layout: {
                 background: { color: '#0e0a08' },
                 textColor: '#7a6a5a',
+                attributionLogo: false,
             },
             grid: {
                 vertLines: { color: '#1a1210' },
@@ -275,17 +280,102 @@ function OrderForm({
 
 
 
+
+function SltpEditor({
+    position,
+    onSaved,
+}: {
+    position: Position
+    onSaved: () => void
+}) {
+    const [slInput, setSlInput] = useState(position.stop_loss ? String(position.stop_loss) : '')
+    const [tpInput, setTpInput] = useState(position.take_profit ? String(position.take_profit) : '')
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const save = async (type: 'stop_loss' | 'take_profit') => {
+        const raw = type === 'stop_loss' ? slInput : tpInput
+        const price = parseFloat(raw)
+        if (!raw) {
+            const orderId = type === 'stop_loss' ? position.sl_order_id : position.tp_order_id
+            if (!orderId) return
+            setSaving(true)
+            await fetch(`/api/futures/orders?id=${orderId}`, { method: 'DELETE' })
+            setSaving(false)
+            onSaved()
+            return
+        }
+        if (isNaN(price) || price <= 0) { setError('Invalid price'); return }
+        setSaving(true)
+        setError(null)
+        const res = await fetch('/api/futures/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ positionId: position.id, type, triggerPrice: price }),
+        })
+        const data = await res.json()
+        setSaving(false)
+        if (!res.ok) { setError(data.error ?? 'Failed'); return }
+        onSaved()
+    }
+
+    return (
+        <div className="flex flex-col gap-2">
+            {error && <p className="text-[10px] text-[#ef4444]">{error}</p>}
+            <div className="flex items-center gap-2">
+                <span className="w-6 text-[10px] text-[#ef4444] font-bold">SL</span>
+                <input
+                    type="number"
+                    placeholder={position.stop_loss ? `$${position.stop_loss}` : 'Not set'}
+                    value={slInput}
+                    onChange={(e) => setSlInput(e.target.value)}
+                    className="w-28 bg-[#0e0a08] border border-[#2e2520] rounded px-2 py-1 text-[11px] text-white placeholder-[#4a3a2a] focus:outline-none focus:border-[#ef4444]"
+                />
+                <button
+                    onClick={() => save('stop_loss')}
+                    disabled={saving}
+                    className="px-2 py-1 rounded text-[10px] bg-[#2e2520] hover:bg-[#3e3020] text-[#7a6a5a] hover:text-white transition-colors disabled:opacity-40"
+                >
+                    {saving ? '…' : slInput === '' && position.sl_order_id ? 'Clear' : 'Set'}
+                </button>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="w-6 text-[10px] text-[#4ade80] font-bold">TP</span>
+                <input
+                    type="number"
+                    placeholder={position.take_profit ? `$${position.take_profit}` : 'Not set'}
+                    value={tpInput}
+                    onChange={(e) => setTpInput(e.target.value)}
+                    className="w-28 bg-[#0e0a08] border border-[#2e2520] rounded px-2 py-1 text-[11px] text-white placeholder-[#4a3a2a] focus:outline-none focus:border-[#4ade80]"
+                />
+                <button
+                    onClick={() => save('take_profit')}
+                    disabled={saving}
+                    className="px-2 py-1 rounded text-[10px] bg-[#2e2520] hover:bg-[#3e3020] text-[#7a6a5a] hover:text-white transition-colors disabled:opacity-40"
+                >
+                    {saving ? '…' : tpInput === '' && position.tp_order_id ? 'Clear' : 'Set'}
+                </button>
+            </div>
+        </div>
+    )
+}
+
+
 function PositionsPanel({
     positions,
     loading,
     closingId,
     onClose,
+    onOrderSaved,
 }: {
     positions: Position[]
     loading: boolean
     closingId: string | null
     onClose: (id: string) => void
+    onOrderSaved: () => void
 }) {
+    const [expandedId, setExpandedId] = useState<string | null>(null)
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-6 text-sm text-[#7a6a5a]">
@@ -306,7 +396,7 @@ function PositionsPanel({
             <table className="w-full text-xs min-w-175">
                 <thead>
                     <tr className="text-[#7a6a5a] border-b border-[#2e2520]">
-                        {['Pair', 'Side', 'Size', 'Collateral', 'Entry', 'Mark', 'Liq.', 'PnL', ''].map((h) => (
+                        {['Pair', 'Side', 'Size', 'Entry', 'Mark', 'Liq.', 'PnL', 'SL / TP', ''].map((h) => (
                             <th key={h} className={`pb-2 pr-4 font-medium ${h === '' ? 'text-right' : 'text-left'}`}>{h}</th>
                         ))}
                     </tr>
@@ -315,36 +405,63 @@ function PositionsPanel({
                     {positions.map((p) => {
                         const up = p.unrealised_pnl >= 0
                         const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+                        const expanded = expandedId === p.id
                         return (
-                            <tr key={p.id} className="border-b border-[#1a1210] hover:bg-[#120c0a]">
-                                <td className="py-2 pr-4 text-white font-medium">{p.pair}</td>
-                                <td className="py-2 pr-4">
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.side === 'long' ? 'bg-[#166534] text-[#4ade80]' : 'bg-[#7f1d1d] text-[#f87171]'
-                                        }`}>
-                                        {p.side.toUpperCase()} {p.leverage}x
-                                    </span>
-                                </td>
-                                <td className="py-2 pr-4 text-white">${fmt(p.size_usd)}</td>
-                                <td className="py-2 pr-4 text-[#7a6a5a]">${fmt(p.collateral_usd)}</td>
-                                <td className="py-2 pr-4 text-[#7a6a5a]">${fmt(p.entry_price)}</td>
-                                <td className="py-2 pr-4 text-white">${fmt(p.mark_price)}</td>
-                                <td className="py-2 pr-4 text-[#ef4444]">${fmt(p.liquidation_price)}</td>
-                                <td className={`py-2 pr-4 font-semibold ${up ? 'text-[#4ade80]' : 'text-[#ef4444]'}`}>
-                                    {up ? '+' : ''}${fmt(p.unrealised_pnl)}
-                                    <span className="ml-1 text-[10px] opacity-70">
-                                        ({up ? '+' : ''}{p.pnl_pct.toFixed(1)}%)
-                                    </span>
-                                </td>
-                                <td className="py-2 text-right">
-                                    <button
-                                        onClick={() => onClose(p.id)}
-                                        disabled={closingId === p.id}
-                                        className="px-2.5 py-1 rounded text-[10px] font-semibold bg-[#2e2520] hover:bg-[#FF5733] hover:text-white text-[#7a6a5a] transition-colors disabled:opacity-40"
-                                    >
-                                        {closingId === p.id ? '…' : 'Close'}
-                                    </button>
-                                </td>
-                            </tr>
+                            <>
+                                <tr key={p.id} className="border-b border-[#1a1210] hover:bg-[#120c0a]">
+                                    <td className="py-2 pr-4 text-white font-medium">{p.pair}</td>
+                                    <td className="py-2 pr-4">
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.side === 'long' ? 'bg-[#166534] text-[#4ade80]' : 'bg-[#7f1d1d] text-[#f87171]'
+                                            }`}>
+                                            {p.side.toUpperCase()} {p.leverage}x
+                                        </span>
+                                    </td>
+                                    <td className="py-2 pr-4 text-white">${fmt(p.size_usd)}</td>
+                                    <td className="py-2 pr-4 text-[#7a6a5a]">${fmt(p.entry_price)}</td>
+                                    <td className="py-2 pr-4 text-white">${fmt(p.mark_price)}</td>
+                                    <td className="py-2 pr-4 text-[#ef4444]">${fmt(p.liquidation_price)}</td>
+                                    <td className={`py-2 pr-4 font-semibold ${up ? 'text-[#4ade80]' : 'text-[#ef4444]'}`}>
+                                        {up ? '+' : ''}${fmt(p.unrealised_pnl)}
+                                        <span className="ml-1 text-[10px] opacity-70">
+                                            ({up ? '+' : ''}{p.pnl_pct.toFixed(1)}%)
+                                        </span>
+                                    </td>
+                                    <td className="py-2 pr-4">
+                                        <div className="flex gap-1.5">
+                                            {p.stop_loss && <span className="text-[10px] text-[#ef4444]">SL ${fmt(p.stop_loss)}</span>}
+                                            {p.take_profit && <span className="text-[10px] text-[#4ade80]">TP ${fmt(p.take_profit)}</span>}
+                                            {!p.stop_loss && !p.take_profit && <span className="text-[10px] text-[#4a3a2a]">—</span>}
+                                        </div>
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                                onClick={() => setExpandedId(expanded ? null : p.id)}
+                                                className="px-2 py-1 rounded text-[10px] font-semibold bg-[#2e2520] hover:bg-[#3e3020] text-[#7a6a5a] hover:text-white transition-colors"
+                                            >
+                                                SL/TP
+                                            </button>
+                                            <button
+                                                onClick={() => onClose(p.id)}
+                                                disabled={closingId === p.id}
+                                                className="px-2.5 py-1 rounded text-[10px] font-semibold bg-[#2e2520] hover:bg-[#FF5733] hover:text-white text-[#7a6a5a] transition-colors disabled:opacity-40"
+                                            >
+                                                {closingId === p.id ? '…' : 'Close'}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {expanded && (
+                                    <tr key={`${p.id}-sltp`} className="border-b border-[#1a1210] bg-[#0e0a08]">
+                                        <td colSpan={9} className="px-4 py-3">
+                                            <SltpEditor
+                                                position={p}
+                                                onSaved={() => { setExpandedId(null); onOrderSaved() }}
+                                            />
+                                        </td>
+                                    </tr>
+                                )}
+                            </>
                         )
                     })}
                 </tbody>
@@ -426,10 +543,10 @@ export default function FuturesPage() {
     return (
         <div className="min-h-screen bg-[#0d0a07] flex flex-col">
             <Topbar />
-
-            <div className="flex flex-1 min-h-0" style={{ height: 'calc(100vh - 56px)' }}>
+            <div className="flex flex-1 md:overflow-hidden md:h-[calc(100vh-56px)]">
                 <Sidebar />
-                <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+
+                <div className="flex-1 flex flex-col min-w-0 overflow-y-auto md:overflow-hidden">
                     <div className="flex items-center border-b border-[#2e2520] overflow-x-auto shrink-0 bg-[#0e0a08]">
                         {markets.length === 0 && (
                             <div className="px-4 py-3 text-xs text-[#4a3a2a]">Loading markets…</div>
@@ -454,9 +571,11 @@ export default function FuturesPage() {
                             </button>
                         ))}
                     </div>
-                    <div className="flex flex-1 min-h-0">
 
-                        <div className="flex flex-col flex-1 min-w-0">
+
+                    <div className="flex flex-col md:flex-row md:flex-1 md:min-h-0">
+
+                        <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
                             <div className="flex items-center gap-1 px-3 py-1.5 border-b border-[#2e2520] shrink-0 bg-[#0e0a08]">
                                 {PERIODS.map((p) => (
                                     <button
@@ -472,12 +591,12 @@ export default function FuturesPage() {
                                 ))}
                             </div>
 
-                            <div className="flex-1 min-h-0">
+                            <div className="h-75 md:h-auto md:flex-1 md:min-h-0">
                                 <CandleChart symbol={selectedMkt} period={period} />
                             </div>
                         </div>
 
-                        <div className="w-64 shrink-0 border-l border-[#2e2520] p-4 bg-[#0e0a08] flex flex-col overflow-hidden">
+                        <div className="w-full md:w-64 md:shrink-0 border-t md:border-t-0 md:border-l border-[#2e2520] p-4 bg-[#0e0a08] flex flex-col">
                             <OrderForm
                                 symbol={selectedMkt}
                                 markPrice={markPrice}
@@ -486,7 +605,7 @@ export default function FuturesPage() {
                         </div>
                     </div>
 
-                    <div className="shrink-0 border-t border-[#2e2520] bg-[#0e0a08]" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                    <div className="shrink-0 border-t border-[#2e2520] bg-[#0e0a08] md:max-h-60 md:overflow-y-auto">
                         <div className="px-4 pt-3 pb-1 flex items-center justify-between sticky top-0 bg-[#0e0a08] z-10">
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-[#7a6a5a] uppercase tracking-wide font-semibold">
@@ -502,15 +621,17 @@ export default function FuturesPage() {
                                 <span className="text-xs text-[#ef4444]">{closeError}</span>
                             )}
                         </div>
-                        <div className="px-4 pb-4">
+                        <div className="px-4 pb-4 overflow-x-auto">
                             <PositionsPanel
                                 positions={positions}
                                 loading={posLoading}
                                 closingId={closingId}
                                 onClose={handleClose}
+                                onOrderSaved={fetchPositions}
                             />
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>

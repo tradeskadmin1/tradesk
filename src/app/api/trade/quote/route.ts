@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { getQuote } from '@/lib/dex'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 import { isSupportedChain, type SupportedChainId } from '@/config/chains'
 import { TOKENS } from '@/config/tokens'
 import { getPair } from '@/config/pairs'
@@ -15,6 +16,9 @@ export async function GET(req: Request) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+
+        const rl = checkRateLimit(`trade:quote:${user.id}`, LIMITS.MODERATE)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)
         const chainIdParam = searchParams.get('chainId')

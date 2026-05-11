@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { getUserBalances } from '@/lib/ledger'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 
 export async function GET(req: Request) {
@@ -12,6 +13,9 @@ export async function GET(req: Request) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+
+        const rl = checkRateLimit(`balances:${user.id}`, LIMITS.MODERATE)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const adminClient = createSupabaseAdminClient() as any
 

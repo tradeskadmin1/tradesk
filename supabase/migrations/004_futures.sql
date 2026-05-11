@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS public.futures_positions (
   realised_pnl          NUMERIC(36,8),
   closing_fee           NUMERIC(36,8),
   opened_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  closed_at             TIMESTAMPTZ
+  closed_at             TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS futures_positions_user_idx   ON public.futures_positions (user_id);

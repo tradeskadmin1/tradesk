@@ -3,6 +3,8 @@ import { parseUnits } from 'viem'
 import { createSupabaseServerClient, createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
 import { getBalance, debitBalance, creditBalance } from '@/lib/ledger'
 import { getGmxSdk, USDC_ADDRESS, USDC_DECIMALS, toLeverageBigInt, FUTURES_MARKETS, FUTURES_FEE_BPS } from '@/lib/gmx'
+import { calcLiquidationPrice } from '@/lib/futures'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
@@ -14,6 +16,9 @@ export async function POST(req: Request) {
         const supabase = await createSupabaseServerClient()
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+        const rl = checkRateLimit(`futures:open:${user.id}`, LIMITS.STRICT)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json()
         const { symbol, side, collateralUsd, leverage } = body as {
@@ -122,9 +127,7 @@ export async function POST(req: Request) {
             ? (Number((BigInt(ticker.minPrice) + BigInt(ticker.maxPrice)) / BigInt(2)) / 1e30)
             : 0
 
-        const liquidationPrice = side === 'long'
-            ? entryPrice * (1 - 1 / leverage * 0.9)
-            : entryPrice * (1 + 1 / leverage * 0.9)
+        const liquidationPrice = calcLiquidationPrice(side, entryPrice, leverage)
 
         const adminClient = createSupabaseAdminClient()
         const { data: position, error: dbErr } = await adminClient

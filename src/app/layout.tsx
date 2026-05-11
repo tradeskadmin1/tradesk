@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Syne, Space_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
-import Web3bg from "./components/3bg";
 import { Providers } from "./providers";
 import PublicNav from './components/public-shell'
-import Footer from './components/footer'
+import FooterShell from './components/footer-shell'
+import Web3bgClient from './components/web3bg-client'
 
 const syne = Syne({
   subsets: ['latin'],
@@ -29,6 +29,13 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Tradesk",
   description: "Web3 Finance App",
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/logo.png', type: 'image/png' },
+    ],
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -41,13 +48,13 @@ export default function RootLayout({
       <body className="relative min-h-screen overflow-x-hidden bg-linear-to-br from-black via-[#0B0F14] to-[#121821]">
         <Providers>
           <div className="fixed inset-0 -z-10">
-            <Web3bg />
+            <Web3bgClient />
           </div>
           <PublicNav />
           <main className="relative z-10 flex flex-col min-h-screen">
             {children}
           </main>
-          <Footer />
+          <FooterShell />
         </Providers>
       </body>
     </html>

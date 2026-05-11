@@ -8,7 +8,6 @@ import Sidebar from "../components/sidebar"
 import MetricCard from "../components/metrics"
 import Chart from "../components/chart"
 import TopOpportunities from "../components/opportunities"
-import SpreadDistribution from "../components/distribution"
 import RecentActivity from "../components/activity"
 import LiveAlerts from "../components/alerts"
 import TradeModal from "../components/trade-modal"
@@ -196,9 +195,8 @@ export default function DashboardPage() {
             <Chart />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 space-y-4">
+            <div className="lg:col-span-2">
               <TopOpportunities kycStatus={metrics.kycStatus} />
-              <SpreadDistribution />
             </div>
             <div className="space-y-4">
               <RecentActivity />

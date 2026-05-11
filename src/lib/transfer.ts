@@ -15,13 +15,15 @@ function toLedgerAddress(tokenAddress: string): string {
 
 
 export interface WithdrawalRequest {
-    userId: string
-    walletId: string
-    withdrawalId: string
-    chainId: SupportedChainId
-    tokenSymbol: string
-    amount: string
-    toAddress: `0x${string}`
+    userId:           string
+    walletId:         string
+    withdrawalId:     string
+    chainId:          SupportedChainId
+    tokenSymbol:      string
+    amount:           string
+    toAddress:        `0x${string}`
+    /** Pass true when the ledger was already debited at submission time */
+    skipLedgerDebit?: boolean
 }
 
 export interface TransferResult {
@@ -73,7 +75,7 @@ export async function estimateWithdrawalFee(
 
 
 export async function executeWithdrawal(req: WithdrawalRequest): Promise<TransferResult> {
-    const { userId, withdrawalId, chainId, tokenSymbol, amount, toAddress } = req
+    const { userId, withdrawalId, chainId, tokenSymbol, amount, toAddress, skipLedgerDebit } = req
     const supabase = createSupabaseAdminClient() as any
     const token = TOKENS[tokenSymbol]
 
@@ -84,21 +86,24 @@ export async function executeWithdrawal(req: WithdrawalRequest): Promise<Transfe
 
     const ledgerAddr = toLedgerAddress(tokenAddress)
 
-    const ledgerBalance = await getBalance({ userId, chainId, tokenAddress: ledgerAddr })
-    if (parseFloat(ledgerBalance) < parseFloat(amount)) {
-        throw new Error(`[transfer] Insufficient ledger balance. Have ${ledgerBalance}, need ${amount}`)
+    if (!skipLedgerDebit) {
+        // Standard path: debit ledger now (funds not yet held)
+        const ledgerBalance = await getBalance({ userId, chainId, tokenAddress: ledgerAddr })
+        if (parseFloat(ledgerBalance) < parseFloat(amount)) {
+            throw new Error(`[transfer] Insufficient ledger balance. Have ${ledgerBalance}, need ${amount}`)
+        }
+        await debitBalance({
+            userId,
+            chainId,
+            tokenSymbol,
+            tokenAddress: ledgerAddr,
+            amount,
+            type: 'withdrawal',
+            refId: withdrawalId,
+            note: `Withdrawal to ${toAddress}`,
+        })
     }
-
-    await debitBalance({
-        userId,
-        chainId,
-        tokenSymbol,
-        tokenAddress: ledgerAddr,
-        amount,
-        type: 'withdrawal',
-        refId: withdrawalId,
-        note: `Withdrawal to ${toAddress}`,
-    })
+    // skipLedgerDebit path: funds were debited at submission, nothing to do here
 
     const {
         walletClient: hotWallet,

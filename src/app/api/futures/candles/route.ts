@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { GMX_ORACLE_URL } from '@/lib/gmx'
+import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
 
 export async function GET(req: Request) {
     try {
+        const rl = checkRateLimit(`candles:${clientIp(req)}`, LIMITS.RELAXED)
+        if (!rl.success) return rlResponse(rl.resetAt)
+
         const { searchParams } = new URL(req.url)
         const symbol = searchParams.get('symbol') ?? 'ETH'
         const period = searchParams.get('period') ?? '1h'
@@ -20,13 +24,17 @@ export async function GET(req: Request) {
             candles: Array<[number, number, number, number, number]>
         }
 
-        const candles = (data.candles ?? []).map(([t, o, h, l, c]) => ({
-            time: t,
-            open: o,
-            high: h,
-            low: l,
-            close: c,
-        }))
+        // Oracle returns newest-first; lightweight-charts requires oldest-first
+        const candles = (data.candles ?? [])
+            .slice()
+            .reverse()
+            .map(([t, o, h, l, c]) => ({
+                time:  t,
+                open:  o,
+                high:  h,
+                low:   l,
+                close: c,
+            }))
 
         return NextResponse.json({ candles })
     } catch (err) {

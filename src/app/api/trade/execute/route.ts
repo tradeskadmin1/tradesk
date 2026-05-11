@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { executeTrade } from '@/lib/dex'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 import { isSupportedChain, type SupportedChainId } from '@/config/chains'
 import { TOKENS } from '@/config/tokens'
 import { getPair } from '@/config/pairs'
@@ -15,6 +16,9 @@ export async function POST(req: Request) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+
+        const rl = checkRateLimit(`trade:execute:${user.id}`, LIMITS.STRICT)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json()
         const { chainId: chainIdRaw, pairId, side, amount, slippageBps } = body

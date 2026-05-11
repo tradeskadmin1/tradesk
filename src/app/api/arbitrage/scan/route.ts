@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import {scanAllPairs} from '@/lib/arbitrage'
+import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 
 export async function POST(req: Request) {
@@ -11,6 +12,9 @@ export async function POST(req: Request) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+
+        const rl = checkRateLimit(`arbitrage:scan:${user.id}`, LIMITS.MODERATE)
+        if (!rl.success) return rlResponse(rl.resetAt)
 
         const result = await scanAllPairs()
 
