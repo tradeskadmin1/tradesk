@@ -136,6 +136,85 @@ export async function getBalance(params: {
 }
 
 
+/**
+ * Record fee income:
+ *   1. Inserts a row in platform_revenue (audit log / reporting).
+ *   2. Credits the platform treasury ledger account so the money is real
+ *      and visible to the admin, not just a log entry.
+ *
+ * The treasury is an internal user with a fixed UUID stored in
+ * PLATFORM_TREASURY_USER_ID.  Its ledger balance accumulates all fees
+ * and can be swept to the hot wallet from the admin dashboard.
+ */
+export async function recordPlatformRevenue(params: {
+    source: 'futures_open' | 'futures_close' | 'arbitrage'
+    userId: string
+    refId?: string
+    amount: number
+    tokenSymbol?: string
+    chainId: number
+    note?: string
+}): Promise<void> {
+    const supabase    = createSupabaseAdminClient()
+    const tokenSymbol = params.tokenSymbol ?? 'USDC'
+    const note        = params.note ?? null
+
+    // ── 1. Audit log ──────────────────────────────────────────────────────────
+    const { error: logErr } = await supabase.from('platform_revenue').insert({
+        source:       params.source,
+        user_id:      params.userId,
+        ref_id:       params.refId ?? null,
+        amount:       params.amount.toFixed(6),
+        token_symbol: tokenSymbol,
+        chain_id:     params.chainId,
+        note,
+    })
+    if (logErr) {
+        console.error('[ledger] platform_revenue insert failed:', logErr.message)
+    }
+
+    // ── 2. Credit treasury balance ────────────────────────────────────────────
+    const treasuryId = process.env.PLATFORM_TREASURY_USER_ID
+    if (!treasuryId) {
+        console.error('[ledger] PLATFORM_TREASURY_USER_ID not set — fee not credited to treasury')
+        return
+    }
+
+    // Derive token address from the token symbol + chain so the treasury
+    // balance row uses the same address as the user side of the trade.
+    const TOKEN_ADDRESSES: Record<string, Record<number, string>> = {
+        USDC: {
+            1:     '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+            56:    '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+            42161: '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
+        },
+        USDT: {
+            1:     '0xdac17f958d2ee523a2206206994597c13d831ec7',
+            56:    '0x55d398326f99059ff775485246999027b3197955',
+            42161: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+        },
+    }
+    const tokenAddress =
+        TOKEN_ADDRESSES[tokenSymbol]?.[params.chainId] ??
+        TOKEN_ADDRESSES['USDC'][params.chainId] ??
+        '0xaf88d065e77c8cc2239327c5edb3a432268e5831'
+
+    const { error: creditErr } = await supabase.rpc('credit_balance', {
+        p_user_id:      treasuryId,
+        p_chain_id:     params.chainId,
+        p_token_symbol: tokenSymbol,
+        p_token_address: tokenAddress,
+        p_amount:       params.amount.toFixed(6),
+        p_type:         'fee',
+        p_ref_id:       params.refId ?? null,
+        p_note:         `[treasury] ${params.source} fee from user ${params.userId.slice(0, 8)}… — ${note}`,
+    })
+    if (creditErr) {
+        console.error('[ledger] treasury credit_balance failed:', creditErr.message)
+    }
+}
+
+
 export async function getLedgerHistory(
     userId: string,
     limit = 20,

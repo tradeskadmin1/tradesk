@@ -4,7 +4,7 @@
  */
 
 import { createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
-import { creditBalance, debitBalance } from '@/lib/ledger'
+import { creditBalance, debitBalance, recordPlatformRevenue } from '@/lib/ledger'
 import { getGmxSdk, USDC_ADDRESS, FUTURES_FEE_BPS } from '@/lib/gmx'
 
 const adminClient = (): any => _createSupabaseAdminClient()
@@ -132,6 +132,16 @@ export async function closePosition(
             note:         `Futures close fee (exceeds return): ${pos.pair}`,
         }).catch(() => { })
     }
+
+    // ── Platform revenue ───────────────────────────────────────────────────────
+    await recordPlatformRevenue({
+        source: 'futures_close',
+        userId,
+        refId: positionId,
+        amount: closeFee,
+        chainId: ARBITRUM_CHAIN_ID,
+        note: `Close fee: ${pos.side} ${pos.pair} (${reason})`,
+    })
 
     // ── DB update ──────────────────────────────────────────────────────────────
     await db

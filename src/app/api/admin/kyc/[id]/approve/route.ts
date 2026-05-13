@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin-auth'
+import { sendKycApprovedEmail } from '@/lib/email'
 
 export async function POST(
     req: Request,
@@ -14,7 +15,7 @@ export async function POST(
 
     const { data: sub, error: fetchErr } = await db
         .from('kyc_submissions')
-        .select('id, status, user_id')
+        .select('id, status, user_id, full_name, users(email)')
         .eq('id', id)
         .single()
 
@@ -40,6 +41,14 @@ export async function POST(
         .from('users')
         .update({ kyc_status: 'approved', updated_at: now })
         .eq('id', sub.user_id)
+
+    // Send approval email (non-blocking — don't fail the request if email fails)
+    const email = sub.users?.email
+    if (email) {
+        sendKycApprovedEmail(email, sub.full_name).catch((err: unknown) =>
+            console.error('[admin/kyc/approve] email failed:', err)
+        )
+    }
 
     console.info(`[admin/kyc/approve] submission ${id} approved by ${auth.adminId}`)
 

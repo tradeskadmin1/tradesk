@@ -8,6 +8,7 @@ const NAV = [
     { label: "Overview",    path: "/admin" },
     { label: "KYC Review",  path: "/admin/kyc" },
     { label: "Withdrawals", path: "/admin/withdrawals" },
+    { label: "Treasury",    path: "/admin/treasury" },
 ]
 
 // ── Hamburger icon ────────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ function HamburgerIcon({ open }: { open: boolean }) {
 // ── Sidebar nav content ───────────────────────────────────────────────────────
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
-    const router   = useRouter()
+    const router = useRouter()
     const pathname = usePathname()
 
     return (
@@ -54,11 +55,10 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                         <div
                             key={item.path}
                             onClick={() => { router.push(item.path); onNavigate?.() }}
-                            className={`px-3 py-2 rounded-md text-sm font-mono cursor-pointer transition-colors ${
-                                active
+                            className={`px-3 py-2 rounded-md text-sm font-mono cursor-pointer transition-colors ${active
                                     ? "bg-[#2a1a14] text-[#FF5733]"
                                     : "text-[#7a6a5a] hover:text-white"
-                            }`}
+                                }`}
                         >
                             {item.label}
                         </div>

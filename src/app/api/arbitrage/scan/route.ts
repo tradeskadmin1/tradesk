@@ -37,6 +37,8 @@ export async function POST(req: Request) {
                 netProfitUsd: parseFloat(o.netProfitUsd.toFixed(2)),
                 riskScore: o.riskScore,
             })),
+            // Diagnostics: shows per-pair why pools were filtered out
+            diagnostics: result.diagnostics,
             scannedAt: new Date().toISOString(),
         })
     } catch (err: unknown) {

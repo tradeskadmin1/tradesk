@@ -239,6 +239,7 @@ export default function AdminKycPage() {
     const [rejectReason, setRejectReason] = useState("")
     const [rejectError, setRejectError] = useState("")
     const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+    const [loadError, setLoadError] = useState<string | null>(null)
 
     const showToast = (msg: string, ok: boolean) => {
         setToast({ msg, ok })
@@ -247,16 +248,21 @@ export default function AdminKycPage() {
 
     const load = useCallback(async (filter: StatusFilter = statusFilter) => {
         setLoading(true)
+        setLoadError(null)
         try {
             const res = await fetch(`/api/admin/kyc?status=${filter}&limit=100`)
-            if (res.ok) {
-                const data = await res.json()
-                const rows: Submission[] = data.submissions ?? []
-                setSubmissions(rows)
-                if (filter === "pending" && rows.length > 0 && !selected) {
-                    setSelected(rows[0])
-                }
+            const data = await res.json()
+            if (!res.ok) {
+                setLoadError(data.error ?? `Server error ${res.status}`)
+                return
             }
+            const rows: Submission[] = data.submissions ?? []
+            setSubmissions(rows)
+            if (filter === "pending" && rows.length > 0 && !selected) {
+                setSelected(rows[0])
+            }
+        } catch (e) {
+            setLoadError("Network error — could not load submissions")
         } finally {
             setLoading(false)
         }
@@ -358,6 +364,11 @@ export default function AdminKycPage() {
                 <div className="w-72 shrink-0 flex flex-col gap-2 overflow-y-auto pr-1">
                     {loading ? (
                         [1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)
+                    ) : loadError ? (
+                        <div className="bg-red-400/5 border border-red-400/20 rounded-xl p-6 text-center">
+                            <p className="font-mono text-[12px] text-red-400">Failed to load</p>
+                            <p className="font-mono text-[10px] text-red-400/60 mt-1">{loadError}</p>
+                        </div>
                     ) : submissions.length === 0 ? (
                         <div className="bg-[#1a1410] border border-[#2e2520] rounded-xl p-6 text-center">
                             <p className="font-mono text-[12px] text-white">

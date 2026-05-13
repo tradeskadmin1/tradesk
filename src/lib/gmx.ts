@@ -15,11 +15,40 @@ export const FUTURES_FEE_BPS = 10
 
 
 export const FUTURES_MARKETS = [
-    { symbol: 'BTC', pair: 'BTC/USD', coingeckoId: 'bitcoin' },
-    { symbol: 'ETH', pair: 'ETH/USD', coingeckoId: 'ethereum' },
-    { symbol: 'SOL', pair: 'SOL/USD', coingeckoId: 'solana' },
-    { symbol: 'ARB', pair: 'ARB/USD', coingeckoId: 'arbitrum' },
+    // ── Tier 1 — highest volume / deepest liquidity ────────────────────────────
+    { symbol: 'BTC',  pair: 'BTC/USD',  coingeckoId: 'bitcoin' },
+    { symbol: 'ETH',  pair: 'ETH/USD',  coingeckoId: 'ethereum' },
+    { symbol: 'SOL',  pair: 'SOL/USD',  coingeckoId: 'solana' },
+    { symbol: 'BNB',  pair: 'BNB/USD',  coingeckoId: 'binancecoin' },
+    { symbol: 'AVAX', pair: 'AVAX/USD', coingeckoId: 'avalanche-2' },
+    { symbol: 'DOGE', pair: 'DOGE/USD', coingeckoId: 'dogecoin' },
+
+    // ── Tier 2 — DeFi blue chips ───────────────────────────────────────────────
     { symbol: 'LINK', pair: 'LINK/USD', coingeckoId: 'chainlink' },
+    { symbol: 'UNI',  pair: 'UNI/USD',  coingeckoId: 'uniswap' },
+    { symbol: 'AAVE', pair: 'AAVE/USD', coingeckoId: 'aave' },
+    { symbol: 'CRV',  pair: 'CRV/USD',  coingeckoId: 'curve-dao-token' },
+    { symbol: 'LDO',  pair: 'LDO/USD',  coingeckoId: 'lido-dao' },
+
+    // ── Tier 3 — L1 / L2 ecosystems ───────────────────────────────────────────
+    { symbol: 'ARB',  pair: 'ARB/USD',  coingeckoId: 'arbitrum' },
+    { symbol: 'OP',   pair: 'OP/USD',   coingeckoId: 'optimism' },
+    { symbol: 'MATIC',pair: 'MATIC/USD',coingeckoId: 'matic-network' },
+    { symbol: 'ATOM', pair: 'ATOM/USD', coingeckoId: 'cosmos' },
+    { symbol: 'NEAR', pair: 'NEAR/USD', coingeckoId: 'near' },
+    { symbol: 'APT',  pair: 'APT/USD',  coingeckoId: 'aptos' },
+    { symbol: 'SUI',  pair: 'SUI/USD',  coingeckoId: 'sui' },
+    { symbol: 'INJ',  pair: 'INJ/USD',  coingeckoId: 'injective-protocol' },
+    { symbol: 'TRX',  pair: 'TRX/USD',  coingeckoId: 'tron' },
+
+    // ── Tier 4 — Arbitrum-native & GMX ecosystem ──────────────────────────────
+    { symbol: 'GMX',  pair: 'GMX/USD',  coingeckoId: 'gmx' },
+
+    // ── Tier 5 — Meme / high-volatility ───────────────────────────────────────
+    { symbol: 'PEPE', pair: 'PEPE/USD', coingeckoId: 'pepe' },
+    { symbol: 'SHIB', pair: 'SHIB/USD', coingeckoId: 'shiba-inu' },
+    { symbol: 'WIF',  pair: 'WIF/USD',  coingeckoId: 'dogwifcoin' },
+    { symbol: 'ORDI', pair: 'ORDI/USD', coingeckoId: 'ordinals' },
 ] as const
 
 export type FuturesSymbol = typeof FUTURES_MARKETS[number]['symbol']

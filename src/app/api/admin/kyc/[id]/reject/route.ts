@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/admin-auth'
+import { sendKycRejectedEmail } from '@/lib/email'
 
 export async function POST(
     req: Request,
@@ -19,7 +20,7 @@ export async function POST(
 
     const { data: sub, error: fetchErr } = await db
         .from('kyc_submissions')
-        .select('id, status, user_id')
+        .select('id, status, user_id, full_name, users(email)')
         .eq('id', id)
         .single()
 
@@ -48,6 +49,14 @@ export async function POST(
         .from('users')
         .update({ kyc_status: 'rejected', updated_at: now })
         .eq('id', sub.user_id)
+
+    // Send rejection email (non-blocking)
+    const email = sub.users?.email
+    if (email) {
+        sendKycRejectedEmail(email, sub.full_name, reason).catch((err: unknown) =>
+            console.error('[admin/kyc/reject] email failed:', err)
+        )
+    }
 
     console.info(`[admin/kyc/reject] submission ${id} rejected by ${auth.adminId} — reason: ${reason}`)
 

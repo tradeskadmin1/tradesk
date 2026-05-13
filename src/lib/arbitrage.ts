@@ -19,19 +19,14 @@ const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 const DEXSCREENER_BASE = 'https://api.dexscreener.com'
 
 
-const MIN_NET_PROFIT_USD = 5
-
-
-const OPPORTUNITY_TTL_MS = 2 * 60 * 1000
-
-
-const GAS_UNITS_PER_SWAP = 280_000
-
-
-const NOTIONAL_TRADE_USD = 1_000
-
-
-const MIN_POOL_LIQUIDITY_USD = 10_000
+const MIN_NET_PROFIT_USD        = 0.50    // minimum net profit to record
+const OPPORTUNITY_TTL_MS        = 2 * 60 * 1000
+const GAS_UNITS_PER_SWAP        = 280_000
+const NOTIONAL_TRADE_USD        = 1_000   // hypothetical trade size for net profit estimate
+const MIN_POOL_LIQUIDITY_USD    = 50_000  // only use pools with real depth
+const MAX_SPREAD_SAME_CHAIN     = 0.05    // 5%  — same-chain spread cap
+const MAX_SPREAD_CROSS_CHAIN    = 0.10    // 10% — cross-chain spread cap (bridge lag allows wider)
+const MAX_PRICE_RATIO           = 2.0     // safety: ignore if prices differ >2x (bad data)
 
 const DEXSCREENER_CHAIN: Record<SupportedChainId, string> = {
     1: 'ethereum',
@@ -47,6 +42,7 @@ interface DexScreenerPair {
     baseToken: { address: string; symbol: string }
     quoteToken: { address: string; symbol: string }
     priceUsd?: string
+    priceNative?: string   // price of base token denominated in the quote token
     liquidity?: { usd: number }
     volume: { h24: number }
 }
@@ -118,26 +114,34 @@ async function fetchDexPrices(
     if (!Array.isArray(data)) return []
 
     const results: NormalisedPrice[] = []
-    const baseLower = baseAddr.toLowerCase()
+    const baseLower  = baseAddr.toLowerCase()
     const quoteLower = quoteAddr.toLowerCase()
 
     for (const p of data) {
-        if (!p.priceUsd) continue
         if ((p.liquidity?.usd ?? 0) < MIN_POOL_LIQUIDITY_USD) continue
 
-        const pBase = p.baseToken.address.toLowerCase()
+        const pBase  = p.baseToken.address.toLowerCase()
         const pQuote = p.quoteToken.address.toLowerCase()
 
         let priceUsd: number
 
         if (pBase === baseLower && pQuote === quoteLower) {
+            // Normal ordering: pool base = our desired base (e.g. WETH/USDC)
+            // priceUsd is already the USD price of our base token
+            if (!p.priceUsd) continue
             priceUsd = parseFloat(p.priceUsd)
         } else if (pBase === quoteLower && pQuote === baseLower) {
-            const raw = parseFloat(p.priceUsd)
-            if (raw <= 0) continue
-            priceUsd = 1 / raw
+            // Inverted ordering: pool base = our quote token (e.g. USDC/WETH)
+            // priceUsd = USD price of quote token (≈ $1 for stablecoins)
+            // priceNative = price of quote token in terms of base token (e.g. 0.000333 WETH per USDC)
+            // ∴ base token USD price = priceUsd / priceNative
+            //   = $1.00 / 0.000333 = $3,000 per WETH  ✓
+            if (!p.priceUsd || !p.priceNative) continue
+            const pNative = parseFloat(p.priceNative)
+            if (pNative <= 0) continue
+            priceUsd = parseFloat(p.priceUsd) / pNative
         } else {
-            continue
+            continue // unrelated pool
         }
 
         if (!isFinite(priceUsd) || priceUsd <= 0) continue
@@ -200,10 +204,17 @@ function calculateRiskScore(params: {
 }
 
 
+export interface PairDiagnostic {
+    pair: string
+    poolsFetched: number
+    filtered: { spread_too_wide: number; ratio_bad: number; profit_too_low: number; no_pools: number }
+    opportunitiesFound: number
+}
+
 async function scanPair(
     pair: TradingPair,
     gasCostByChain: Record<SupportedChainId, number>,
-): Promise<ArbitrageOpportunity[]> {
+): Promise<{ opportunities: ArbitrageOpportunity[]; diagnostic: PairDiagnostic }> {
     const settled = await Promise.allSettled(
         pair.supportedChains.map((chainId) => fetchDexPrices(pair, chainId)),
     )
@@ -213,81 +224,78 @@ async function scanPair(
         if (r.status === 'fulfilled') allPrices.push(...r.value)
     }
 
-    if (allPrices.length < 2) return []
+    const diagnostic: PairDiagnostic = {
+        pair: pair.id,
+        poolsFetched: allPrices.length,
+        filtered: { spread_too_wide: 0, ratio_bad: 0, profit_too_low: 0, no_pools: 0 },
+        opportunitiesFound: 0,
+    }
 
-    const opportunities: ArbitrageOpportunity[] = []
+    if (allPrices.length < 2) {
+        diagnostic.filtered.no_pools++
+        return { opportunities: [], diagnostic }
+    }
+
+    const candidates: ArbitrageOpportunity[] = []
 
     for (let i = 0; i < allPrices.length; i++) {
         for (let j = 0; j < allPrices.length; j++) {
             if (i === j) continue
 
-            const buy = allPrices[i]
-            const sell = allPrices[j]
-
+            const buy      = allPrices[i]
+            const sell     = allPrices[j]
             if (buy.priceUsd >= sell.priceUsd) continue
 
-            const spreadPct = (sell.priceUsd - buy.priceUsd) / buy.priceUsd
-            const estimatedProfitUsd = NOTIONAL_TRADE_USD * spreadPct
-
             const sameChain = buy.chainId === sell.chainId
-            const buyGas = gasCostByChain[buy.chainId] ?? 15
-            const sellGas = gasCostByChain[sell.chainId] ?? 15
-            const estimatedGasUsd = sameChain
-                ? buyGas
-                : buyGas + sellGas
+            const spreadPct = (sell.priceUsd - buy.priceUsd) / buy.priceUsd
+            const maxSpread = sameChain ? MAX_SPREAD_SAME_CHAIN : MAX_SPREAD_CROSS_CHAIN
 
-            const netProfitUsd = estimatedProfitUsd - estimatedGasUsd
-            if (netProfitUsd < MIN_NET_PROFIT_USD) continue
+            if (sell.priceUsd / buy.priceUsd > MAX_PRICE_RATIO) {
+                diagnostic.filtered.ratio_bad++; continue
+            }
+            if (spreadPct > maxSpread) {
+                diagnostic.filtered.spread_too_wide++; continue
+            }
+
+            const estimatedProfitUsd = NOTIONAL_TRADE_USD * spreadPct
+            const buyGas             = gasCostByChain[buy.chainId] ?? 15
+            const sellGas            = gasCostByChain[sell.chainId] ?? 15
+            const estimatedGasUsd    = sameChain ? buyGas : buyGas + sellGas
+            const netProfitUsd       = estimatedProfitUsd - estimatedGasUsd
+
+            if (netProfitUsd < MIN_NET_PROFIT_USD) {
+                diagnostic.filtered.profit_too_low++; continue
+            }
 
             const minLiquidityUsd = Math.min(buy.liquidityUsd, sell.liquidityUsd)
-            const riskScore = calculateRiskScore({
-                spreadPct,
-                minLiquidityUsd,
-                sameChain,
-                netProfitUsd,
-            })
+            const riskScore = calculateRiskScore({ spreadPct, minLiquidityUsd, sameChain, netProfitUsd })
 
-            opportunities.push({
+            candidates.push({
                 pair: pair.id,
-                buyDex: buy.dex,
-                sellDex: sell.dex,
-                buyChainId: buy.chainId,
-                sellChainId: sell.chainId,
-                buyPrice: buy.priceUsd,
-                sellPrice: sell.priceUsd,
-                profitPct: spreadPct,
-                estimatedProfitUsd,
-                estimatedGasUsd,
-                netProfitUsd,
+                buyDex: buy.dex, sellDex: sell.dex,
+                buyChainId: buy.chainId, sellChainId: sell.chainId,
+                buyPrice: buy.priceUsd, sellPrice: sell.priceUsd,
+                profitPct: spreadPct, estimatedProfitUsd, estimatedGasUsd, netProfitUsd,
                 riskScore,
                 routePath: {
-                    buy: {
-                        dex: buy.dex,
-                        chainId: buy.chainId,
-                        pairAddress: buy.pairAddress,
-                        liquidity: buy.liquidityUsd,
-                    },
-                    sell: {
-                        dex: sell.dex,
-                        chainId: sell.chainId,
-                        pairAddress: sell.pairAddress,
-                        liquidity: sell.liquidityUsd,
-                    },
+                    buy:  { dex: buy.dex,  chainId: buy.chainId,  pairAddress: buy.pairAddress,  liquidity: buy.liquidityUsd },
+                    sell: { dex: sell.dex, chainId: sell.chainId, pairAddress: sell.pairAddress, liquidity: sell.liquidityUsd },
                 },
             })
         }
     }
 
+    // Keep only the best opportunity per buy→sell route
     const best = new Map<string, ArbitrageOpportunity>()
-    for (const opp of opportunities) {
+    for (const opp of candidates) {
         const key = `${opp.buyDex}:${opp.buyChainId}|${opp.sellDex}:${opp.sellChainId}`
         const existing = best.get(key)
-        if (!existing || opp.netProfitUsd > existing.netProfitUsd) {
-            best.set(key, opp)
-        }
+        if (!existing || opp.netProfitUsd > existing.netProfitUsd) best.set(key, opp)
     }
 
-    return [...best.values()].sort((a, b) => b.netProfitUsd - a.netProfitUsd)
+    const opportunities = [...best.values()].sort((a, b) => b.netProfitUsd - a.netProfitUsd)
+    diagnostic.opportunitiesFound = opportunities.length
+    return { opportunities, diagnostic }
 }
 
 
@@ -296,6 +304,7 @@ export async function scanAllPairs(): Promise<{
     found: number
     saved: number
     opportunities: ArbitrageOpportunity[]
+    diagnostics: PairDiagnostic[]
 }> {
     const adminClient = createSupabaseAdminClient()
 
@@ -325,8 +334,12 @@ export async function scanAllPairs(): Promise<{
     )
 
     const allOpportunities: ArbitrageOpportunity[] = []
+    const allDiagnostics: PairDiagnostic[] = []
     for (const r of settled) {
-        if (r.status === 'fulfilled') allOpportunities.push(...r.value)
+        if (r.status === 'fulfilled') {
+            allOpportunities.push(...r.value.opportunities)
+            allDiagnostics.push(r.value.diagnostic)
+        }
     }
 
     let saved = 0
@@ -366,6 +379,7 @@ export async function scanAllPairs(): Promise<{
         found: allOpportunities.length,
         saved,
         opportunities: allOpportunities,
+        diagnostics: allDiagnostics,
     }
 }
 

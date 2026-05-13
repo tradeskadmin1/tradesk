@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parseUnits } from 'viem'
 import { createSupabaseServerClient, createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
-import { getBalance, debitBalance, creditBalance } from '@/lib/ledger'
+import { getBalance, debitBalance, creditBalance, recordPlatformRevenue } from '@/lib/ledger'
 import { getGmxSdk, USDC_ADDRESS, USDC_DECIMALS, toLeverageBigInt, FUTURES_MARKETS, FUTURES_FEE_BPS } from '@/lib/gmx'
 import { calcLiquidationPrice } from '@/lib/futures'
 import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
@@ -84,6 +84,15 @@ export async function POST(req: Request) {
             amount: String(openFee),
             type: 'fee',
             note: `Futures open fee: ${side} ${symbol}/USD — $${openFee.toFixed(2)}`,
+        })
+
+        // Credit the fee to platform revenue
+        await recordPlatformRevenue({
+            source: 'futures_open',
+            userId: user.id,
+            amount: openFee,
+            chainId: ARBITRUM_CHAIN_ID,
+            note: `Open fee: ${side} ${symbol}/USD ${leverage}x`,
         })
 
         const collateralRaw = parseUnits(String(collateralUsd), USDC_DECIMALS)

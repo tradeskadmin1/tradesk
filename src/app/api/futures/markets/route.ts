@@ -34,7 +34,10 @@ export async function GET(req: Request) {
             }
         })
 
-        return NextResponse.json({ markets })
+        // Only return markets the oracle actually has price data for
+        const activeMarkets = markets.filter((m) => m.priceUsd !== null)
+
+        return NextResponse.json({ markets: activeMarkets })
     } catch (err) {
         console.error('[GET /api/futures/markets]', err)
         return NextResponse.json({ error: 'Failed to fetch markets' }, { status: 500 })

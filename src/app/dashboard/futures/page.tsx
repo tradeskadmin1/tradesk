@@ -8,6 +8,81 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 
+// ─── Token icons ─────────────────────────────────────────────────────────────
+// CoinGecko small images (32×32). Falls back to a coloured letter badge.
+const TOKEN_ICON_URL: Record<string, string> = {
+    BTC:  'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+    ETH:  'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+    SOL:  'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+    BNB:  'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+    AVAX: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',
+    DOGE: 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
+    LINK: 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
+    UNI:  'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
+    AAVE: 'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
+    CRV:  'https://assets.coingecko.com/coins/images/12124/small/Curve.png',
+    LDO:  'https://assets.coingecko.com/coins/images/13573/small/Lido_DAO.png',
+    ARB:  'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+    OP:   'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+    MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+    ATOM: 'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
+    NEAR: 'https://assets.coingecko.com/coins/images/10365/small/near_icon.png',
+    APT:  'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
+    SUI:  'https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg',
+    INJ:  'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
+    TRX:  'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+    GMX:  'https://assets.coingecko.com/coins/images/18323/small/arbit.png',
+    PEPE: 'https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg',
+    SHIB: 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
+    WIF:  'https://assets.coingecko.com/coins/images/33566/small/dogwifhat.jpg',
+    ORDI: 'https://assets.coingecko.com/coins/images/28451/small/ordi.png',
+}
+
+// Consistent hue per symbol for the letter-fallback badge
+const SYMBOL_HUE: Record<string, number> = {
+    BTC:20, ETH:220, SOL:260, BNB:45, AVAX:5, DOGE:45, LINK:200, UNI:300,
+    AAVE:130, CRV:240, LDO:10, ARB:150, OP:5, MATIC:270, ATOM:200, NEAR:5,
+    APT:260, SUI:210, INJ:200, TRX:10, GMX:160, PEPE:120, SHIB:30, WIF:30, ORDI:30,
+}
+
+function TokenIcon({ symbol, size = 28 }: { symbol: string; size?: number }) {
+    const [err, setErr] = useState(false)
+    const url = TOKEN_ICON_URL[symbol]
+    const hue = SYMBOL_HUE[symbol] ?? 200
+    const px = `${size}px`
+
+    if (!url || err) {
+        return (
+            <span
+                style={{
+                    width: px, height: px, minWidth: px,
+                    background: `hsl(${hue} 60% 28%)`,
+                    color: `hsl(${hue} 80% 75%)`,
+                    fontSize: size < 24 ? 9 : 11,
+                }}
+                className="rounded-full flex items-center justify-center font-bold select-none"
+            >
+                {symbol.slice(0, 3)}
+            </span>
+        )
+    }
+
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+            src={url}
+            alt={symbol}
+            width={size}
+            height={size}
+            style={{ width: px, height: px, minWidth: px }}
+            className="rounded-full object-cover"
+            onError={() => setErr(true)}
+        />
+    )
+}
+
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Market {
     symbol: string
     pair: string
@@ -34,6 +109,195 @@ interface Position {
 }
 
 
+// ─── Market Picker ────────────────────────────────────────────────────────────
+const MARKET_GROUPS = [
+    { label: 'Major',      symbols: ['BTC','ETH','SOL','BNB','AVAX','DOGE'] },
+    { label: 'DeFi',       symbols: ['LINK','UNI','AAVE','CRV','LDO'] },
+    { label: 'L1 / L2',   symbols: ['ARB','OP','MATIC','ATOM','NEAR','APT','SUI','INJ','TRX'] },
+    { label: 'Arb-native', symbols: ['GMX'] },
+    { label: 'Meme',       symbols: ['PEPE','SHIB','WIF','ORDI'] },
+]
+
+function MarketPicker({
+    markets,
+    selected,
+    onSelect,
+}: {
+    markets: Market[]
+    selected: string
+    onSelect: (symbol: string) => void
+}) {
+    const [open, setOpen] = useState(false)
+    const [search, setSearch] = useState('')
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    const current = markets.find((m) => m.symbol === selected)
+    const markPrice = current?.priceUsd
+        ? parseFloat(current.priceUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })
+        : null
+
+    // Focus search when opened
+    useEffect(() => {
+        if (open) setTimeout(() => inputRef.current?.focus(), 50)
+        else setSearch('')
+    }, [open])
+
+    // Close on Escape
+    useEffect(() => {
+        if (!open) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [open])
+
+    const q = search.toLowerCase()
+    const filtered = q
+        ? markets.filter((m) => m.symbol.toLowerCase().includes(q) || m.pair.toLowerCase().includes(q))
+        : null // null = show grouped
+
+    return (
+        <>
+            {/* ── Trigger button ── */}
+            <button
+                onClick={() => setOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1210] hover:bg-[#2e2520] border border-[#2e2520] transition-colors"
+            >
+                <TokenIcon symbol={selected} size={24} />
+                <div className="flex flex-col items-start leading-tight">
+                    <span className="text-sm font-bold text-white">{current?.pair ?? `${selected}/USD`}</span>
+                    {markPrice && (
+                        <span className="text-[11px] text-[#7a6a5a]">${markPrice}</span>
+                    )}
+                </div>
+                {/* chevron */}
+                <svg className="w-3.5 h-3.5 text-[#7a6a5a] ml-1 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+            </button>
+
+            {/* ── Drawer / panel ── */}
+            {open && (
+                <div className="fixed inset-0 z-50 flex flex-col justify-end md:justify-start md:items-start">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                        onClick={() => setOpen(false)}
+                    />
+
+                    {/* Panel — bottom sheet on mobile, top-left panel on desktop */}
+                    <div className="relative w-full md:w-80 md:max-w-sm bg-[#0e0a08] border-t border-[#2e2520] md:border md:rounded-xl md:mt-16 md:ml-4 md:shadow-2xl flex flex-col max-h-[80vh] md:max-h-[calc(100vh-5rem)] rounded-t-2xl md:rounded-t-xl overflow-hidden">
+
+                        {/* Header */}
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2e2520] shrink-0">
+                            <svg className="w-4 h-4 text-[#7a6a5a] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+                            </svg>
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                placeholder="Search markets…"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="flex-1 bg-transparent text-sm text-white placeholder-[#4a3a2a] focus:outline-none"
+                            />
+                            <button
+                                onClick={() => setOpen(false)}
+                                className="text-[#7a6a5a] hover:text-white transition-colors p-1"
+                            >
+                                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* List */}
+                        <div className="overflow-y-auto flex-1 py-2">
+                            {filtered ? (
+                                // Search results — flat list
+                                filtered.length === 0 ? (
+                                    <p className="text-center text-sm text-[#4a3a2a] py-8">No results</p>
+                                ) : (
+                                    filtered.map((m) => (
+                                        <MarketRow
+                                            key={m.symbol}
+                                            market={m}
+                                            selected={selected}
+                                            onSelect={() => { onSelect(m.symbol); setOpen(false) }}
+                                        />
+                                    ))
+                                )
+                            ) : (
+                                // Grouped view
+                                MARKET_GROUPS.map((g) => {
+                                    const rows = g.symbols
+                                        .map((s) => markets.find((m) => m.symbol === s))
+                                        .filter(Boolean) as Market[]
+                                    if (!rows.length) return null
+                                    return (
+                                        <div key={g.label}>
+                                            <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[#4a3a2a]">
+                                                {g.label}
+                                            </p>
+                                            {rows.map((m) => (
+                                                <MarketRow
+                                                    key={m.symbol}
+                                                    market={m}
+                                                    selected={selected}
+                                                    onSelect={() => { onSelect(m.symbol); setOpen(false) }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    )
+}
+
+function MarketRow({
+    market,
+    selected,
+    onSelect,
+}: {
+    market: Market
+    selected: string
+    onSelect: () => void
+}) {
+    const isSelected = market.symbol === selected
+    const price = market.priceUsd
+        ? parseFloat(market.priceUsd).toLocaleString('en-US', { maximumFractionDigits: 4 })
+        : null
+
+    return (
+        <button
+            onClick={onSelect}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#1a1210] ${isSelected ? 'bg-[#1a1210]' : ''}`}
+        >
+            <TokenIcon symbol={market.symbol} size={32} />
+            <div className="flex-1 text-left min-w-0">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-white">{market.symbol}</span>
+                    <span className="text-[10px] text-[#4a3a2a]">/ USD</span>
+                </div>
+                <div className="text-xs text-[#7a6a5a] truncate">
+                    {price ? `$${price}` : 'No price data'}
+                </div>
+            </div>
+            {isSelected && (
+                <svg className="w-4 h-4 text-[#FF5733] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                </svg>
+            )}
+        </button>
+    )
+}
+
+
+// ─── Candlestick chart ────────────────────────────────────────────────────────
 function CandleChart({ symbol, period }: { symbol: string; period: string }) {
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
@@ -123,6 +387,125 @@ function CandleChart({ symbol, period }: { symbol: string; period: string }) {
 }
 
 
+// ─── Leverage breakdown ───────────────────────────────────────────────────────
+/**
+ * Shows users exactly what leverage means for THEIR numbers:
+ * - How much they actually control
+ * - What happens at +5% / +10% / +20% / liq scenarios
+ */
+function LeverageBreakdown({
+    col,
+    sizeUsd,
+    leverage,
+    side,
+    liqPrice,
+    markPrice,
+}: {
+    col: number
+    sizeUsd: number
+    leverage: number
+    side: 'long' | 'short'
+    liqPrice: number | null
+    markPrice: number | null
+}) {
+    // Price move scenarios to show
+    const scenarios = [5, 10, 20] as const
+
+    // PnL for a given % price move (positive = price went in your favour)
+    const pnl = (movePct: number) => (sizeUsd * movePct) / 100
+    const returnPct = (movePct: number) => (pnl(movePct) / col) * 100
+
+    // Distance to liquidation as a % of current price
+    const liqPct = liqPrice && markPrice
+        ? (Math.abs(markPrice - liqPrice) / markPrice) * 100
+        : null
+
+    const isLong = side === 'long'
+
+    return (
+        <div className="mt-2 rounded-lg border border-[#2e2520] overflow-hidden text-[11px]">
+            {/* Header — what you actually control */}
+            <div className="px-3 py-2 bg-[#1a1210] border-b border-[#2e2520] flex items-center justify-between">
+                <span className="text-[#7a6a5a]">Your <span className="text-white font-semibold">${col.toFixed(0)}</span> controls</span>
+                <span className="text-white font-bold">${sizeUsd.toLocaleString('en-US', { maximumFractionDigits: 0 })} position</span>
+            </div>
+
+            {/* Scenario table */}
+            <div className="divide-y divide-[#1a1210]">
+                {/* Column headers */}
+                <div className="grid grid-cols-3 px-3 py-1.5 text-[10px] text-[#4a3a2a] font-medium">
+                    <span>Price move</span>
+                    <span className="text-center">Profit / Loss</span>
+                    <span className="text-right">Return on $</span>
+                </div>
+
+                {/* Winning scenarios */}
+                {scenarios.map((pct) => {
+                    const gain = pnl(pct)
+                    const ret = returnPct(pct)
+                    return (
+                        <div key={pct} className="grid grid-cols-3 px-3 py-1.5 items-center">
+                            <span className="text-[#4ade80]">
+                                {isLong ? '▲' : '▼'} {pct}%
+                            </span>
+                            <span className="text-center text-[#4ade80] font-semibold">
+                                +${gain.toFixed(2)}
+                            </span>
+                            <span className="text-right text-[#4ade80]">
+                                +{ret.toFixed(0)}%
+                            </span>
+                        </div>
+                    )
+                })}
+
+                {/* Losing scenarios (same % moves, but against you) */}
+                {scenarios.map((pct) => {
+                    const loss = pnl(pct)
+                    const ret = returnPct(pct)
+                    return (
+                        <div key={`loss-${pct}`} className="grid grid-cols-3 px-3 py-1.5 items-center">
+                            <span className="text-[#f87171]">
+                                {isLong ? '▼' : '▲'} {pct}%
+                            </span>
+                            <span className="text-center text-[#f87171] font-semibold">
+                                −${loss.toFixed(2)}
+                            </span>
+                            <span className="text-right text-[#f87171]">
+                                −{ret.toFixed(0)}%
+                            </span>
+                        </div>
+                    )
+                })}
+
+                {/* Liquidation row */}
+                <div className="grid grid-cols-3 px-3 py-1.5 items-center bg-[#1c0a0a]">
+                    <span className="text-[#ef4444] font-semibold">☠ Liq.</span>
+                    <span className="text-center text-[#ef4444] font-semibold">
+                        −${col.toFixed(2)}
+                    </span>
+                    <span className="text-right text-[#ef4444]">
+                        {liqPct != null
+                            ? `${isLong ? '▼' : '▲'} ${liqPct.toFixed(2)}% move`
+                            : `▼ ${(90 / leverage).toFixed(2)}% move`}
+                    </span>
+                </div>
+            </div>
+
+            {/* Plain-English summary */}
+            <div className="px-3 py-2 bg-[#0e0a08] border-t border-[#2e2520] text-[10px] text-[#4a3a2a] leading-relaxed">
+                {leverage === 1
+                    ? 'At 1× you own the position outright — profits and losses match the price move directly.'
+                    : <>At <span className="text-white">{leverage}×</span>, every 1% price move = <span className="text-white">{leverage}%</span> gain or loss on your collateral. You get liquidated after a{' '}
+                      <span className="text-[#ef4444]">{liqPct != null ? liqPct.toFixed(2) : (90 / leverage).toFixed(2)}% adverse move</span>.
+                    </>
+                }
+            </div>
+        </div>
+    )
+}
+
+
+// ─── Order form ───────────────────────────────────────────────────────────────
 function OrderForm({
     symbol,
     markPrice,
@@ -227,25 +610,42 @@ function OrderForm({
                 <div className="flex justify-between text-[10px] text-[#4a3a2a] mt-0.5">
                     <span>1x</span><span>10x</span><span>25x</span><span>50x</span>
                 </div>
+                {/* Leverage explainer */}
+                {col > 0 ? (
+                    <LeverageBreakdown col={col} sizeUsd={sizeUsd} leverage={leverage} side={side} liqPrice={liqPrice} markPrice={markPrice} />
+                ) : (
+                    <p className="text-[10px] text-[#4a3a2a] mt-1.5 leading-relaxed">
+                        Enter a collateral amount to see what leverage means for your trade.
+                    </p>
+                )}
             </div>
 
             <div className="bg-[#1a1210] rounded-md p-3 text-xs flex flex-col gap-1.5">
                 <div className="flex justify-between">
-                    <span className="text-[#7a6a5a]">Size</span>
-                    <span className="text-white">${sizeUsd > 0 ? sizeUsd.toFixed(2) : '—'}</span>
+                    <span className="text-[#7a6a5a]">Position Size</span>
+                    <span className="text-white">${sizeUsd > 0 ? sizeUsd.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</span>
                 </div>
                 <div className="flex justify-between">
                     <span className="text-[#7a6a5a]">Entry Price</span>
                     <span className="text-white">
-                        {markPrice ? `$${markPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'}
+                        {markPrice ? `$${markPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}` : '—'}
                     </span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-[#7a6a5a]">Liq. Price</span>
+                    <span className="text-[#ef4444]">Liq. Price</span>
                     <span className="text-[#ef4444]">
-                        {liqPrice ? `$${liqPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'}
+                        {liqPrice ? `$${liqPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}` : '—'}
                     </span>
                 </div>
+                {/* Distance to liquidation as a % — useful at a glance */}
+                {liqPrice && markPrice && (
+                    <div className="flex justify-between">
+                        <span className="text-[#7a6a5a]">Liq. Distance</span>
+                        <span className="text-[#f97316]">
+                            {(Math.abs(markPrice - liqPrice) / markPrice * 100).toFixed(2)}% move
+                        </span>
+                    </div>
+                )}
                 <div className="border-t border-[#2e2520] my-0.5" />
                 <div className="flex justify-between">
                     <span className="text-[#7a6a5a]">Open Fee (0.1%)</span>
@@ -279,8 +679,7 @@ function OrderForm({
 }
 
 
-
-
+// ─── SL/TP editor ─────────────────────────────────────────────────────────────
 function SltpEditor({
     position,
     onSaved,
@@ -361,6 +760,7 @@ function SltpEditor({
 }
 
 
+// ─── Positions panel ──────────────────────────────────────────────────────────
 function PositionsPanel({
     positions,
     loading,
@@ -411,8 +811,7 @@ function PositionsPanel({
                                 <tr key={p.id} className="border-b border-[#1a1210] hover:bg-[#120c0a]">
                                     <td className="py-2 pr-4 text-white font-medium">{p.pair}</td>
                                     <td className="py-2 pr-4">
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.side === 'long' ? 'bg-[#166534] text-[#4ade80]' : 'bg-[#7f1d1d] text-[#f87171]'
-                                            }`}>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.side === 'long' ? 'bg-[#166534] text-[#4ade80]' : 'bg-[#7f1d1d] text-[#f87171]'}`}>
                                             {p.side.toUpperCase()} {p.leverage}x
                                         </span>
                                     </td>
@@ -471,7 +870,7 @@ function PositionsPanel({
 }
 
 
-
+// ─── Page ─────────────────────────────────────────────────────────────────────
 const PERIODS = ['1m', '5m', '15m', '1h', '4h', '1d']
 
 export default function FuturesPage() {
@@ -499,7 +898,12 @@ export default function FuturesPage() {
         try {
             const res = await fetch('/api/futures/markets')
             const data = await res.json()
-            if (data.markets) setMarkets(data.markets)
+            if (data.markets) {
+                const active: Market[] = data.markets.filter((m: Market) => m.priceUsd !== null)
+                setMarkets(active)
+                // If the selected market was dropped, switch to the first available
+                setSelectedMkt((prev) => active.find((m) => m.symbol === prev) ? prev : (active[0]?.symbol ?? prev))
+            }
         } catch { /* ignore */ }
     }, [])
 
@@ -547,50 +951,53 @@ export default function FuturesPage() {
                 <Sidebar />
 
                 <div className="flex-1 flex flex-col min-w-0 overflow-y-auto md:overflow-hidden">
-                    <div className="flex items-center border-b border-[#2e2520] overflow-x-auto shrink-0 bg-[#0e0a08]">
-                        {markets.length === 0 && (
-                            <div className="px-4 py-3 text-xs text-[#4a3a2a]">Loading markets…</div>
+
+                    {/* ── Chart header bar ── */}
+                    <div className="flex items-center gap-3 px-3 py-2 border-b border-[#2e2520] shrink-0 bg-[#0e0a08] flex-wrap gap-y-2">
+                        {/* Market picker trigger */}
+                        <MarketPicker
+                            markets={markets}
+                            selected={selectedMkt}
+                            onSelect={setSelectedMkt}
+                        />
+
+                        {/* Divider */}
+                        <div className="hidden md:block w-px h-8 bg-[#2e2520]" />
+
+                        {/* Mark price (desktop) */}
+                        {markPrice && (
+                            <div className="hidden md:flex flex-col leading-tight">
+                                <span className="text-base font-bold text-white">
+                                    ${markPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}
+                                </span>
+                                <span className="text-[10px] text-[#7a6a5a]">Mark Price</span>
+                            </div>
                         )}
-                        {markets.map((m) => (
-                            <button
-                                key={m.symbol}
-                                onClick={() => setSelectedMkt(m.symbol)}
-                                className={`flex flex-col items-start px-4 py-2.5 border-r border-[#2e2520] transition-colors shrink-0 ${selectedMkt === m.symbol
-                                    ? 'bg-[#1a1210] border-b-2 border-b-[#FF5733]'
-                                    : 'hover:bg-[#1a1210]'
-                                    }`}
-                            >
-                                <span className={`text-sm font-bold ${selectedMkt === m.symbol ? 'text-white' : 'text-[#7a6a5a]'}`}>
-                                    {m.pair}
-                                </span>
-                                <span className="text-xs text-[#7a6a5a]">
-                                    {m.priceUsd
-                                        ? `$${parseFloat(m.priceUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                                        : '—'}
-                                </span>
-                            </button>
-                        ))}
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Period buttons */}
+                        <div className="flex items-center gap-1">
+                            {PERIODS.map((p) => (
+                                <button
+                                    key={p}
+                                    onClick={() => setPeriod(p)}
+                                    className={`px-2.5 py-1 rounded text-xs transition-colors ${period === p
+                                        ? 'bg-[#2e2520] text-white'
+                                        : 'text-[#7a6a5a] hover:text-white'
+                                        }`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-
+                    {/* ── Chart + Order form ── */}
                     <div className="flex flex-col md:flex-row md:flex-1 md:min-h-0">
 
                         <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
-                            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-[#2e2520] shrink-0 bg-[#0e0a08]">
-                                {PERIODS.map((p) => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPeriod(p)}
-                                        className={`px-2.5 py-0.5 rounded text-xs transition-colors ${period === p
-                                            ? 'bg-[#2e2520] text-white'
-                                            : 'text-[#7a6a5a] hover:text-white'
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-
                             <div className="h-75 md:h-auto md:flex-1 md:min-h-0">
                                 <CandleChart symbol={selectedMkt} period={period} />
                             </div>
@@ -605,6 +1012,7 @@ export default function FuturesPage() {
                         </div>
                     </div>
 
+                    {/* ── Positions ── */}
                     <div className="shrink-0 border-t border-[#2e2520] bg-[#0e0a08] md:max-h-60 md:overflow-y-auto">
                         <div className="px-4 pt-3 pb-1 flex items-center justify-between sticky top-0 bg-[#0e0a08] z-10">
                             <div className="flex items-center gap-2">

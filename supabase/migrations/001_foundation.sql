@@ -50,11 +50,11 @@ CREATE POLICY "users: update own row" ON public.users FOR UPDATE USING (auth.uid
 CREATE TABLE IF NOT EXISTS public.custodial_wallets (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id               UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  chain_id              INTEGER NOT NULL,  -- 1=ETH, 56=BSC, 42161=Arbitrum
+  chain_id              INTEGER NOT NULL,
   address               TEXT NOT NULL,
-  encrypted_private_key TEXT NOT NULL,     -- AES-256-GCM ciphertext, base64
-  encrypted_dek         TEXT NOT NULL,     -- Data Encryption Key ciphertext from KMS
-  derivation_path       TEXT NOT NULL,     -- BIP-44 path used to derive this key
+  encrypted_private_key TEXT NOT NULL,
+  encrypted_dek         TEXT NOT NULL,
+  derivation_path       TEXT NOT NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, chain_id)
 );
