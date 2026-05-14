@@ -27,8 +27,63 @@ const dmSans = DM_Sans({
 
 
 export const metadata: Metadata = {
-  title: "Tradesk",
-  description: "Web3 Finance App",
+  title: {
+    default: "Tradesk — Professional Decentralized Trading",
+    template: "%s | Tradesk",
+  },
+  description:
+    "Trade crypto spot and perpetuals across Ethereum, Arbitrum and BNB Chain. Best-price DEX aggregation, cross-exchange arbitrage scanner, and up to 50× leverage — all non-custodial.",
+  keywords: [
+    "decentralized exchange",
+    "crypto trading",
+    "DEX aggregator",
+    "perpetual futures",
+    "arbitrage scanner",
+    "DeFi trading platform",
+    "Ethereum trading",
+    "Arbitrum DEX",
+    "on-chain trading",
+    "non-custodial exchange",
+    "cross-chain trading",
+    "crypto perpetuals",
+    "Tradesk",
+  ],
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://tradesk-admin1.vercel.app"
+  ),
+  openGraph: {
+    type: "website",
+    siteName: "Tradesk",
+    title: "Tradesk — Professional Decentralized Trading",
+    description:
+      "Trade crypto spot and perpetuals across Ethereum, Arbitrum and BNB Chain. Best-price DEX aggregation, cross-exchange arbitrage scanner, and up to 50× leverage — all non-custodial.",
+    url: "/",
+    images: [
+      {
+        url: "/logo.png",
+        width: 512,
+        height: 512,
+        alt: "Tradesk logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Tradesk — Professional Decentralized Trading",
+    description:
+      "Trade crypto spot and perpetuals across Ethereum, Arbitrum and BNB Chain. DEX aggregation, arbitrage scanner, and 50× leverage — non-custodial.",
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+    },
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
