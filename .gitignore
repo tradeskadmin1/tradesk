@@ -36,6 +36,11 @@ yarn-error.log*
 # local scripts — may contain sensitive derivation utilities
 scripts/
 
+# Claude Code — local dev tooling only, not needed for deployment
+.claude/
+CLAUDE.md
+AGENTS.md
+
 # vercel
 .vercel
 
