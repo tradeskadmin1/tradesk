@@ -182,12 +182,14 @@ export default function DashboardPage() {
               value={String(metrics.activeTrades)}
               change="Pending settlement"
             />
-            <MetricCard
-              label="KYC Status"
-              value={metrics.kycStatus === "approved" ? "Verified" : metrics.kycStatus === "pending" ? "Under Review" : "Not Submitted"}
-              change={metrics.kycStatus === "none" ? "Click to verify →" : ""}
-              positive={metrics.kycStatus === "approved"}
-            />
+            {metrics.kycStatus !== "approved" && (
+              <MetricCard
+                label="KYC Status"
+                value={metrics.kycStatus === "pending" ? "Under Review" : "Not Submitted"}
+                change={metrics.kycStatus === "none" ? "Click to verify →" : "Verification in progress"}
+                positive={false}
+              />
+            )}
           </div>
 
           <div className="bg-[#201710] border border-[#2e2520] p-4 rounded-lg">
