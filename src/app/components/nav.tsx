@@ -14,13 +14,6 @@ export default function Navbar() {
 
     if (isDash || isOnboarding) return null
 
-    const navItems = [
-        { name: "Swap", href: "/swap" },
-        { name: "Pools", href: "/pools" },
-        { name: "Analytics", href: "/analytics" },
-        { name: "Docs", href: "/docs" },
-    ]
-
     return (
         <nav className="flex w-full mt-7 max-w-6xl mx-auto font-mono bg-[linear-gradient(to_bottom_right,#2A2520,#3a2f2a,#c94a2a,#FF5733)] rounded-[20px] items-center justify-between px-4 py-3">
             <Link href="/" className="flex items-center gap-2 cursor-pointer">
@@ -31,15 +24,14 @@ export default function Navbar() {
             </Link>
 
             <div className="hidden md:flex items-center flex-1 gap-6 justify-center">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.name}
-                        href={item.href}
-                        className="text-[16px] text-white hover:text-[#FF5733] transition-colors"
-                    >
-                        {item.name}
-                    </Link>
-                ))}
+                <Link
+                    href="/docs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[16px] text-white hover:text-[#FF5733] transition-colors"
+                >
+                    Docs
+                </Link>
             </div>
 
             {!isAuth && (

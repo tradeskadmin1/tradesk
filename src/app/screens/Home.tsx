@@ -122,9 +122,14 @@ export default function HomeScreen() {
                     cursor-pointer text-black transition-all duration-200 hover:bg-[#ff6a4d] hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(255,87,51,0.35)]">
                         Launch App →
                     </button>
-                    <button className="px-8 py-3.5 rounded-[10px] cursor-pointer text-[15px] font-semibold bg-transparent border border-white/8 text-white transition-all duration-200 hover:border-white/25 hover:bg-white/4 hover:-translate-y-0.5">
+                    <a
+                        href="/docs"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-8 py-3.5 rounded-[10px] cursor-pointer text-[15px] font-semibold bg-transparent border border-white/8 text-white transition-all duration-200 hover:border-white/25 hover:bg-white/4 hover:-translate-y-0.5 inline-block"
+                    >
                         View Protocol Docs
-                    </button>
+                    </a>
                 </div>
             </div>
 
