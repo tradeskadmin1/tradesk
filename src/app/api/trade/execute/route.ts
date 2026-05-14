@@ -17,7 +17,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const rl = checkRateLimit(`trade:execute:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`trade:execute:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json()
@@ -111,6 +111,35 @@ export async function POST(req: Request) {
                 updated_at: new Date().toISOString(),
             })
             .eq('id', order.id)
+
+        // ── Sync ledger balances to reflect the on-chain trade ────────────────
+        // Without this the user's balance display would never update after a swap.
+        const sellTokenAddress = TOKENS[sellToken]?.addresses[chainId] ?? '0x0000000000000000000000000000000000000000'
+        const buyTokenAddress  = TOKENS[buyToken]?.addresses[chainId]  ?? '0x0000000000000000000000000000000000000000'
+
+        // Debit what was sold (don't throw on error — the on-chain tx already happened)
+        adminClient.rpc('debit_balance', {
+            p_user_id:      user.id,
+            p_chain_id:     chainId,
+            p_token_symbol: sellToken,
+            p_token_address: sellTokenAddress,
+            p_amount:       result.sellAmount,
+            p_type:         'trade_sell',
+            p_ref_id:       order.id,
+            p_note:         `Sold ${result.sellAmount} ${sellToken} via ${result.dexUsed}`,
+        }).catch((e: any) => console.warn('[trade/execute] ledger debit failed:', e))
+
+        // Credit what was bought
+        adminClient.rpc('credit_balance', {
+            p_user_id:      user.id,
+            p_chain_id:     chainId,
+            p_token_symbol: buyToken,
+            p_token_address: buyTokenAddress,
+            p_amount:       result.buyAmount,
+            p_type:         'trade_buy',
+            p_ref_id:       order.id,
+            p_note:         `Bought ${result.buyAmount} ${buyToken} via ${result.dexUsed}`,
+        }).catch((e: any) => console.warn('[trade/execute] ledger credit failed:', e))
 
         return NextResponse.json({
             success: true,

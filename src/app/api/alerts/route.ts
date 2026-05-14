@@ -5,19 +5,17 @@ import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 const adminClient = (): any => _admin()
 
-// ── GET — list alerts + auto-trigger any that have been hit ───────────────────
 export async function GET(req: Request) {
     try {
         const supabase = await createSupabaseServerClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`alerts:get:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`alerts:get:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const db = adminClient()
 
-        // Fetch all alerts for this user
         const { data: alerts, error } = await db
             .from('user_alerts')
             .select('*')
@@ -29,7 +27,6 @@ export async function GET(req: Request) {
 
         const rows: any[] = alerts ?? []
 
-        // Auto-trigger: check live prices for active alerts
         const activeRows = rows.filter((a) => a.status === 'active')
         if (activeRows.length > 0) {
             const uniqueTokens = [...new Set(activeRows.map((a: any) => a.token as string))]
@@ -38,7 +35,6 @@ export async function GET(req: Request) {
             try {
                 const raw = await getAllPrices(uniqueTokens.map((t) => ({ base: t, quote: 'USDT' })))
                 for (const [sym, price] of Object.entries(raw)) {
-                    // sym = e.g. 'BTCUSDT' → strip USDT suffix
                     const token = sym.replace('USDT', '')
                     priceMap[token] = parseFloat(price)
                 }
@@ -51,8 +47,8 @@ export async function GET(req: Request) {
                 if (price === undefined) continue
                 const hit =
                     alert.condition === 'above' ? price >= alert.threshold :
-                    alert.condition === 'below' ? price <= alert.threshold :
-                    false
+                        alert.condition === 'below' ? price <= alert.threshold :
+                            false
                 if (hit) toTrigger.push(alert.id)
             }
 
@@ -61,12 +57,11 @@ export async function GET(req: Request) {
                     .from('user_alerts')
                     .update({ status: 'triggered', triggered_at: new Date().toISOString() })
                     .in('id', toTrigger)
-                    .eq('user_id', user.id)  // safety
+                    .eq('user_id', user.id)
 
-                // Patch the in-memory rows so the response is immediately correct
                 for (const row of rows) {
                     if (toTrigger.includes(row.id)) {
-                        row.status       = 'triggered'
+                        row.status = 'triggered'
                         row.triggered_at = new Date().toISOString()
                     }
                 }
@@ -80,14 +75,13 @@ export async function GET(req: Request) {
     }
 }
 
-// ── POST — create a new alert ─────────────────────────────────────────────────
 export async function POST(req: Request) {
     try {
         const supabase = await createSupabaseServerClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`alerts:create:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`alerts:create:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json()
@@ -106,7 +100,6 @@ export async function POST(req: Request) {
 
         const db = adminClient()
 
-        // Enforce a per-user limit (max 20 active alerts)
         const { count } = await db
             .from('user_alerts')
             .select('*', { count: 'exact', head: true })
@@ -125,13 +118,13 @@ export async function POST(req: Request) {
         const { data: alert, error } = await db
             .from('user_alerts')
             .insert({
-                user_id:   user.id,
+                user_id: user.id,
                 label,
-                type:      'price',
-                token:     token.toUpperCase(),
+                type: 'price',
+                token: token.toUpperCase(),
                 condition,
                 threshold: thresholdNum,
-                status:    'active',
+                status: 'active',
             })
             .select()
             .single()
@@ -145,14 +138,13 @@ export async function POST(req: Request) {
     }
 }
 
-// ── DELETE — dismiss a single alert ──────────────────────────────────────────
 export async function DELETE(req: Request) {
     try {
         const supabase = await createSupabaseServerClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`alerts:delete:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`alerts:delete:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)
@@ -165,7 +157,7 @@ export async function DELETE(req: Request) {
             .from('user_alerts')
             .update({ status: 'dismissed' })
             .eq('id', id)
-            .eq('user_id', user.id)  // ownership check
+            .eq('user_id', user.id)
 
         if (error) throw new Error(error.message)
 

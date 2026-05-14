@@ -5,7 +5,7 @@ import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
 export async function GET(req: Request) {
     try {
-        const rl = checkRateLimit(`candles:${clientIp(req)}`, LIMITS.RELAXED)
+        const rl = await checkRateLimit(`candles:${clientIp(req)}`, LIMITS.RELAXED)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
             candles: Array<[number, number, number, number, number]>
         }
 
-        // Oracle returns newest-first; lightweight-charts requires oldest-first
+        
         const candles = (data.candles ?? [])
             .slice()
             .reverse()

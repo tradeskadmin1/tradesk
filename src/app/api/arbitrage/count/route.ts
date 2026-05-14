@@ -11,7 +11,7 @@ export async function GET(req: Request) {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`arbitrage:count:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`arbitrage:count:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { count, error } = await adminClient()

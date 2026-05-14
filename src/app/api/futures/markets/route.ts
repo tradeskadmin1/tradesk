@@ -4,7 +4,7 @@ import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
 export async function GET(req: Request) {
     try {
-        const rl = checkRateLimit(`markets:${clientIp(req)}`, LIMITS.RELAXED)
+        const rl = await checkRateLimit(`markets:${clientIp(req)}`, LIMITS.RELAXED)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const sdk = await getGmxSdk()
@@ -34,7 +34,6 @@ export async function GET(req: Request) {
             }
         })
 
-        // Only return markets the oracle actually has price data for
         const activeMarkets = markets.filter((m) => m.priceUsd !== null)
 
         return NextResponse.json({ markets: activeMarkets })

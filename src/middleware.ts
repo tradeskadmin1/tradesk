@@ -38,6 +38,29 @@ export async function middleware(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     const { pathname } = req.nextUrl
 
+
+    if (pathname.startsWith('/admin')) {
+        if (!user) {
+            const redirectUrl = req.nextUrl.clone()
+            redirectUrl.pathname = '/auth'
+            redirectUrl.searchParams.set('redirectTo', pathname)
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+            .split(',')
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean)
+
+        if (!adminEmails.includes((user.email ?? '').toLowerCase())) {
+            const redirectUrl = req.nextUrl.clone()
+            redirectUrl.pathname = '/dashboard'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        return res
+    }
+
     const protectedRoutes = ['/dashboard', '/onboarding']
     const isProtected = protectedRoutes.some((route) => pathname.startsWith(route))
 
@@ -81,6 +104,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
     matcher: [
+        '/admin/:path*',
         '/dashboard/:path*',
         '/onboarding/:path*',
         '/auth',

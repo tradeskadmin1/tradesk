@@ -19,14 +19,14 @@ const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 const DEXSCREENER_BASE = 'https://api.dexscreener.com'
 
 
-const MIN_NET_PROFIT_USD        = 0.50    // minimum net profit to record
-const OPPORTUNITY_TTL_MS        = 2 * 60 * 1000
-const GAS_UNITS_PER_SWAP        = 280_000
-const NOTIONAL_TRADE_USD        = 1_000   // hypothetical trade size for net profit estimate
-const MIN_POOL_LIQUIDITY_USD    = 50_000  // only use pools with real depth
-const MAX_SPREAD_SAME_CHAIN     = 0.05    // 5%  — same-chain spread cap
-const MAX_SPREAD_CROSS_CHAIN    = 0.10    // 10% — cross-chain spread cap (bridge lag allows wider)
-const MAX_PRICE_RATIO           = 2.0     // safety: ignore if prices differ >2x (bad data)
+const MIN_NET_PROFIT_USD = 0.10
+const OPPORTUNITY_TTL_MS = 2 * 60 * 1000
+const GAS_UNITS_PER_SWAP = 200_000
+const NOTIONAL_TRADE_USD = 5_000
+const MIN_POOL_LIQUIDITY_USD = 5_000
+const MAX_SPREAD_SAME_CHAIN = 0.05
+const MAX_SPREAD_CROSS_CHAIN = 0.10
+const MAX_PRICE_RATIO = 2.0
 
 const DEXSCREENER_CHAIN: Record<SupportedChainId, string> = {
     1: 'ethereum',
@@ -42,7 +42,7 @@ interface DexScreenerPair {
     baseToken: { address: string; symbol: string }
     quoteToken: { address: string; symbol: string }
     priceUsd?: string
-    priceNative?: string   // price of base token denominated in the quote token
+    priceNative?: string
     liquidity?: { usd: number }
     volume: { h24: number }
 }
@@ -114,34 +114,27 @@ async function fetchDexPrices(
     if (!Array.isArray(data)) return []
 
     const results: NormalisedPrice[] = []
-    const baseLower  = baseAddr.toLowerCase()
+    const baseLower = baseAddr.toLowerCase()
     const quoteLower = quoteAddr.toLowerCase()
 
     for (const p of data) {
         if ((p.liquidity?.usd ?? 0) < MIN_POOL_LIQUIDITY_USD) continue
 
-        const pBase  = p.baseToken.address.toLowerCase()
+        const pBase = p.baseToken.address.toLowerCase()
         const pQuote = p.quoteToken.address.toLowerCase()
 
         let priceUsd: number
 
         if (pBase === baseLower && pQuote === quoteLower) {
-            // Normal ordering: pool base = our desired base (e.g. WETH/USDC)
-            // priceUsd is already the USD price of our base token
             if (!p.priceUsd) continue
             priceUsd = parseFloat(p.priceUsd)
         } else if (pBase === quoteLower && pQuote === baseLower) {
-            // Inverted ordering: pool base = our quote token (e.g. USDC/WETH)
-            // priceUsd = USD price of quote token (≈ $1 for stablecoins)
-            // priceNative = price of quote token in terms of base token (e.g. 0.000333 WETH per USDC)
-            // ∴ base token USD price = priceUsd / priceNative
-            //   = $1.00 / 0.000333 = $3,000 per WETH  ✓
             if (!p.priceUsd || !p.priceNative) continue
             const pNative = parseFloat(p.priceNative)
             if (pNative <= 0) continue
             priceUsd = parseFloat(p.priceUsd) / pNative
         } else {
-            continue // unrelated pool
+            continue
         }
 
         if (!isFinite(priceUsd) || priceUsd <= 0) continue
@@ -164,7 +157,7 @@ async function estimateSwapGasUsd(
     chainId: SupportedChainId,
     nativePriceUsd: number,
 ): Promise<number> {
-    const fallbacks: Record<SupportedChainId, number> = { 1: 14, 56: 0.45, 42161: 0.70 }
+    const fallbacks: Record<SupportedChainId, number> = { 1: 7, 56: 0.20, 42161: 0.15 }
 
     try {
         const gasPrice = await getPublicClient(chainId).getGasPrice()
@@ -242,8 +235,8 @@ async function scanPair(
         for (let j = 0; j < allPrices.length; j++) {
             if (i === j) continue
 
-            const buy      = allPrices[i]
-            const sell     = allPrices[j]
+            const buy = allPrices[i]
+            const sell = allPrices[j]
             if (buy.priceUsd >= sell.priceUsd) continue
 
             const sameChain = buy.chainId === sell.chainId
@@ -258,10 +251,10 @@ async function scanPair(
             }
 
             const estimatedProfitUsd = NOTIONAL_TRADE_USD * spreadPct
-            const buyGas             = gasCostByChain[buy.chainId] ?? 15
-            const sellGas            = gasCostByChain[sell.chainId] ?? 15
-            const estimatedGasUsd    = sameChain ? buyGas : buyGas + sellGas
-            const netProfitUsd       = estimatedProfitUsd - estimatedGasUsd
+            const buyGas = gasCostByChain[buy.chainId] ?? 15
+            const sellGas = gasCostByChain[sell.chainId] ?? 15
+            const estimatedGasUsd = sameChain ? buyGas : buyGas + sellGas
+            const netProfitUsd = estimatedProfitUsd - estimatedGasUsd
 
             if (netProfitUsd < MIN_NET_PROFIT_USD) {
                 diagnostic.filtered.profit_too_low++; continue
@@ -278,14 +271,13 @@ async function scanPair(
                 profitPct: spreadPct, estimatedProfitUsd, estimatedGasUsd, netProfitUsd,
                 riskScore,
                 routePath: {
-                    buy:  { dex: buy.dex,  chainId: buy.chainId,  pairAddress: buy.pairAddress,  liquidity: buy.liquidityUsd },
+                    buy: { dex: buy.dex, chainId: buy.chainId, pairAddress: buy.pairAddress, liquidity: buy.liquidityUsd },
                     sell: { dex: sell.dex, chainId: sell.chainId, pairAddress: sell.pairAddress, liquidity: sell.liquidityUsd },
                 },
             })
         }
     }
 
-    // Keep only the best opportunity per buy→sell route
     const best = new Map<string, ArbitrageOpportunity>()
     for (const opp of candidates) {
         const key = `${opp.buyDex}:${opp.buyChainId}|${opp.sellDex}:${opp.sellChainId}`

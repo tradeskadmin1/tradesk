@@ -14,7 +14,7 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const rl = checkRateLimit(`deposit:address:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`deposit:address:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)

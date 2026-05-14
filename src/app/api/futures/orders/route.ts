@@ -4,7 +4,6 @@ import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 
 const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 
-// ── POST /api/futures/orders — create or replace a SL/TP order ────────────────
 
 export async function POST(req: Request) {
     try {
@@ -12,12 +11,12 @@ export async function POST(req: Request) {
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`futures:orders:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`futures:orders:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { positionId, type, triggerPrice } = await req.json() as {
-            positionId:   string
-            type:         'stop_loss' | 'take_profit'
+            positionId: string
+            type: 'stop_loss' | 'take_profit'
             triggerPrice: number
         }
 
@@ -27,7 +26,6 @@ export async function POST(req: Request) {
 
         const db = createSupabaseAdminClient()
 
-        // Verify position belongs to user and is open
         const { data: pos, error: posErr } = await db
             .from('futures_positions')
             .select('id, side, entry_price, mark_price, pair, size_usd, chain_id')
@@ -38,22 +36,20 @@ export async function POST(req: Request) {
 
         if (posErr || !pos) return NextResponse.json({ error: 'Position not found' }, { status: 404 })
 
-        // Validate trigger direction
         const currentPrice = pos.mark_price ?? pos.entry_price
         if (type === 'stop_loss') {
-            if (pos.side === 'long'  && triggerPrice >= currentPrice)
+            if (pos.side === 'long' && triggerPrice >= currentPrice)
                 return NextResponse.json({ error: 'Stop loss must be below current price for longs' }, { status: 400 })
             if (pos.side === 'short' && triggerPrice <= currentPrice)
                 return NextResponse.json({ error: 'Stop loss must be above current price for shorts' }, { status: 400 })
         }
         if (type === 'take_profit') {
-            if (pos.side === 'long'  && triggerPrice <= currentPrice)
+            if (pos.side === 'long' && triggerPrice <= currentPrice)
                 return NextResponse.json({ error: 'Take profit must be above current price for longs' }, { status: 400 })
             if (pos.side === 'short' && triggerPrice >= currentPrice)
                 return NextResponse.json({ error: 'Take profit must be below current price for shorts' }, { status: 400 })
         }
 
-        // Cancel any existing order of this type on the position
         await db
             .from('futures_orders')
             .update({ status: 'cancelled' })
@@ -61,19 +57,18 @@ export async function POST(req: Request) {
             .eq('order_type', type)
             .eq('status', 'pending')
 
-        // Insert new order
         const { data: order, error: insertErr } = await db
             .from('futures_orders')
             .insert({
-                user_id:       user.id,
-                position_id:   positionId,
-                chain_id:      pos.chain_id,
-                pair:          pos.pair,
-                side:          pos.side,
-                order_type:    type,
-                size_usd:      pos.size_usd,
+                user_id: user.id,
+                position_id: positionId,
+                chain_id: pos.chain_id,
+                pair: pos.pair,
+                side: pos.side,
+                order_type: type,
+                size_usd: pos.size_usd,
                 trigger_price: triggerPrice,
-                status:        'pending',
+                status: 'pending',
             })
             .select('id')
             .single()
@@ -90,7 +85,6 @@ export async function POST(req: Request) {
     }
 }
 
-// ── DELETE /api/futures/orders?id=xxx — cancel a pending order ────────────────
 
 export async function DELETE(req: Request) {
     try {
@@ -98,7 +92,7 @@ export async function DELETE(req: Request) {
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl2 = checkRateLimit(`futures:orders:${user.id}`, LIMITS.STRICT)
+        const rl2 = await checkRateLimit(`futures:orders:${user.id}`, LIMITS.STRICT)
         if (!rl2.success) return rlResponse(rl2.resetAt)
 
         const { searchParams } = new URL(req.url)

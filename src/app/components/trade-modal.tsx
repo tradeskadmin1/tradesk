@@ -5,6 +5,124 @@ import { useRouter } from "next/navigation"
 import { ACTIVE_PAIRS } from "@/config/pairs"
 import { CHAIN_CONFIG, type SupportedChainId } from "@/config/chains"
 
+const TOKEN_ICONS: Record<string, string> = {
+  ETH: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  WETH: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+  WBTC: 'https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+  BNB: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  LINK: 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
+  UNI: 'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
+  AAVE: 'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
+  ARB: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+  MATIC: 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+  PEPE: 'https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg',
+  SHIB: 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
+  GMX: 'https://assets.coingecko.com/coins/images/18323/small/arbit.png',
+  CAKE: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png',
+  CRV: 'https://assets.coingecko.com/coins/images/12124/small/Curve.png',
+  LDO: 'https://assets.coingecko.com/coins/images/13573/small/Lido_DAO.png',
+  MKR: 'https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png',
+  SNX: 'https://assets.coingecko.com/coins/images/3406/small/SNX.png',
+  SUSHI: 'https://assets.coingecko.com/coins/images/12271/small/512x512_Logo_no_chop.png',
+  BAL: 'https://assets.coingecko.com/coins/images/11683/small/Balancer.png',
+  COMP: 'https://assets.coingecko.com/coins/images/10775/small/COMP.png',
+  STG: 'https://assets.coingecko.com/coins/images/24413/small/STG_LOGO.png',
+  WOO: 'https://assets.coingecko.com/coins/images/12251/small/woonomic.jpeg',
+  PENDLE: 'https://assets.coingecko.com/coins/images/15069/small/Pendle_Logo_Normal-03.png',
+  JOE: 'https://assets.coingecko.com/coins/images/17569/small/traderjoe.png',
+  RDNT: 'https://assets.coingecko.com/coins/images/26536/small/Radiant-Logo.png',
+  MAGIC: 'https://assets.coingecko.com/coins/images/18623/small/magic.png',
+  GRT: 'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
+  ONEINCH: 'https://assets.coingecko.com/coins/images/13469/small/1inch-token.png',
+  CVX: 'https://assets.coingecko.com/coins/images/15585/small/convex.png',
+  YFI: 'https://assets.coingecko.com/coins/images/11849/small/yfi-192x192.png',
+  FXS: 'https://assets.coingecko.com/coins/images/13423/small/frax_share.png',
+  XRP: 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
+  ADA: 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
+  DOT: 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
+  DOGE: 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
+}
+
+function tokenIconColor(symbol: string): string {
+  let h = 0
+  for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) & 0xffff
+  return `hsl(${h % 360},55%,42%)`
+}
+
+function TokenIcon({ symbol, size = 20 }: { symbol: string; size?: number }) {
+  const [err, setErr] = useState(false)
+  const src = TOKEN_ICONS[symbol]
+  if (!src || err) {
+    return (
+      <span
+        style={{ width: size, height: size, background: tokenIconColor(symbol), fontSize: size * 0.5 }}
+        className="rounded-full flex items-center justify-center text-white font-bold shrink-0"
+      >
+        {symbol[0]}
+      </span>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={symbol}
+      width={size}
+      height={size}
+      onError={() => setErr(true)}
+      className="rounded-full object-cover shrink-0"
+    />
+  )
+}
+
+function PairPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = ACTIVE_PAIRS.find((p) => p.id === value) ?? ACTIVE_PAIRS[0]
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 bg-[#2A2520] border border-[#3a2f2a] hover:border-[#FF5733]/40 focus:border-[#FF5733]/40 outline-none rounded-xl px-3 py-2.5 transition-colors cursor-pointer"
+      >
+        <TokenIcon symbol={selected.base} size={22} />
+        <span className="flex-1 text-left font-mono text-[13px] text-white">{selected.label}</span>
+        <svg className={`w-3.5 h-3.5 text-[#7a6a5a] transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#1a1510] border border-[#3a2f2a] rounded-xl overflow-hidden shadow-xl max-h-56 overflow-y-auto">
+          {ACTIVE_PAIRS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { onChange(p.id); setOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-[#2A2520] ${p.id === value ? "bg-[#2A2520]" : ""}`}
+            >
+              <TokenIcon symbol={p.base} size={20} />
+              <span className="flex-1 font-mono text-[12px] text-white">{p.label}</span>
+              {p.id === value && (
+                <span className="text-[#FF5733] text-xs">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   onClose: () => void
   defaultPairId?: string
@@ -220,15 +338,7 @@ export default function TradeModal({ onClose, defaultPairId, kycStatus }: Props)
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="font-mono text-[10px] text-[#7a6a5a] uppercase tracking-wider">Pair</label>
-              <select
-                value={pairId}
-                onChange={(e) => { setPairId(e.target.value); reset() }}
-                className="w-full bg-[#2A2520] border border-[#3a2f2a] focus:border-[#FF5733]/40 outline-none rounded-xl px-4 py-2.5 font-mono text-[13px] text-white transition-colors appearance-none cursor-pointer"
-              >
-                {ACTIVE_PAIRS.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#1a1510]">{p.label}</option>
-                ))}
-              </select>
+              <PairPicker value={pairId} onChange={(id) => { setPairId(id); reset() }} />
             </div>
 
             <div className="flex flex-col gap-1.5">

@@ -6,7 +6,7 @@ import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 
 export async function GET(req: Request) {
     try {
-        const rl = checkRateLimit(`prices:${clientIp(req)}`, LIMITS.RELAXED)
+        const rl = await checkRateLimit(`prices:${clientIp(req)}`, LIMITS.RELAXED)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)

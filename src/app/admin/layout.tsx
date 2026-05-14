@@ -5,17 +5,17 @@ import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 
 const NAV = [
-    { label: "Overview",    path: "/admin" },
-    { label: "KYC Review",  path: "/admin/kyc" },
+    { label: "Overview", path: "/admin" },
+    { label: "KYC Review", path: "/admin/kyc" },
     { label: "Withdrawals", path: "/admin/withdrawals" },
-    { label: "Treasury",    path: "/admin/treasury" },
+    { label: "Treasury", path: "/admin/treasury" },
+    { label: "Hot Wallet", path: "/admin/hot-wallet" },
 ]
 
-// ── Hamburger icon ────────────────────────────────────────────────────────────
 
 function HamburgerIcon({ open }: { open: boolean }) {
     return (
-        <div className="w-5 h-[14px] flex flex-col justify-between">
+        <div className="w-5 h-3.5 flex flex-col justify-between">
             <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 origin-left ${open ? "rotate-45 translate-x-px" : ""}`} />
             <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 ${open ? "opacity-0 scale-x-0" : ""}`} />
             <span className={`block h-0.5 w-full bg-white rounded-full transition-all duration-300 origin-left ${open ? "-rotate-45 translate-x-px" : ""}`} />
@@ -23,7 +23,6 @@ function HamburgerIcon({ open }: { open: boolean }) {
     )
 }
 
-// ── Sidebar nav content ───────────────────────────────────────────────────────
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
     const router = useRouter()
@@ -31,7 +30,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
     return (
         <div className="flex flex-col h-full">
-            {/* Brand */}
             <div
                 onClick={() => { router.push("/admin"); onNavigate?.() }}
                 className="flex items-center gap-2 mb-8 cursor-pointer"
@@ -45,7 +43,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                 </div>
             </div>
 
-            {/* Nav items */}
             <div className="flex flex-col gap-0.5 flex-1">
                 {NAV.map((item) => {
                     const active = item.path === "/admin"
@@ -56,8 +53,8 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                             key={item.path}
                             onClick={() => { router.push(item.path); onNavigate?.() }}
                             className={`px-3 py-2 rounded-md text-sm font-mono cursor-pointer transition-colors ${active
-                                    ? "bg-[#2a1a14] text-[#FF5733]"
-                                    : "text-[#7a6a5a] hover:text-white"
+                                ? "bg-[#2a1a14] text-[#FF5733]"
+                                : "text-[#7a6a5a] hover:text-white"
                                 }`}
                         >
                             {item.label}
@@ -66,7 +63,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                 })}
             </div>
 
-            {/* Back to app */}
             <div
                 onClick={() => { router.push("/dashboard"); onNavigate?.() }}
                 className="px-3 py-2 rounded-md text-xs font-mono text-[#4a3a2a] hover:text-[#7a6a5a] cursor-pointer transition-colors"
@@ -77,7 +73,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
     )
 }
 
-// ── Layout ────────────────────────────────────────────────────────────────────
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter()
@@ -86,20 +81,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const close = useCallback(() => setDrawerOpen(false), [])
 
-    // Lock body scroll when drawer is open
     useEffect(() => {
         document.body.style.overflow = drawerOpen ? "hidden" : ""
         return () => { document.body.style.overflow = "" }
     }, [drawerOpen])
 
-    // Close drawer on Escape
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === "Escape") close() }
         window.addEventListener("keydown", handler)
         return () => window.removeEventListener("keydown", handler)
     }, [close])
 
-    // Verify admin access
     useEffect(() => {
         fetch("/api/admin/stats")
             .then((res) => {
@@ -124,13 +116,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="min-h-screen bg-[#0d0a07] flex flex-col md:flex-row">
-
-            {/* ── Desktop sidebar ──────────────────────────────────────── */}
             <div className="hidden md:flex w-48 border-r border-[#2e2520] p-4 flex-col min-h-screen shrink-0">
                 <NavContent />
             </div>
-
-            {/* ── Mobile top bar ───────────────────────────────────────── */}
             <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#2e2520] shrink-0">
                 <div className="flex items-center gap-2">
                     <Image src="/logo.png" alt="Tradesk" width={24} height={24} />
@@ -148,7 +136,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </button>
             </div>
 
-            {/* ── Mobile backdrop ──────────────────────────────────────── */}
             <div
                 aria-hidden="true"
                 onClick={close}
@@ -156,7 +143,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     ${drawerOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
             />
 
-            {/* ── Mobile drawer ────────────────────────────────────────── */}
             <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0d0a07] border-r border-[#2e2520]
                 p-4 flex flex-col md:hidden
                 transform transition-transform duration-300 ease-in-out
@@ -178,7 +164,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <NavContent onNavigate={close} />
             </div>
 
-            {/* ── Page content ─────────────────────────────────────────── */}
             <div className="flex-1 overflow-auto min-w-0">
                 {children}
             </div>

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const rl = checkRateLimit(`wallets:create:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`wallets:create:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         let fullName: string | undefined

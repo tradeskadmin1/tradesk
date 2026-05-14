@@ -13,7 +13,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const rl = checkRateLimit(`arbitrage:scan:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`arbitrage:scan:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const result = await scanAllPairs()
@@ -37,7 +37,6 @@ export async function POST(req: Request) {
                 netProfitUsd: parseFloat(o.netProfitUsd.toFixed(2)),
                 riskScore: o.riskScore,
             })),
-            // Diagnostics: shows per-pair why pools were filtered out
             diagnostics: result.diagnostics,
             scannedAt: new Date().toISOString(),
         })

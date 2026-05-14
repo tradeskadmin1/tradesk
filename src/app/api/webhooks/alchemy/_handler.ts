@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { formatUnits } from 'viem'
 import { createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
 import { creditBalance } from '@/lib/ledger'
@@ -45,8 +45,11 @@ function verifySignature(
 ): boolean {
     const secret = process.env[secretEnvKey]
     if (!secret) {
-        console.warn(`[webhook/alchemy] ${secretEnvKey} not set — skipping verification`)
-        return true
+        console.error(
+            `[webhook/alchemy] ${secretEnvKey} is not set — rejecting all webhook requests. ` +
+            `Configure this env var with the Alchemy signing key.`,
+        )
+        return false
     }
     if (!signature) return false
 
@@ -54,7 +57,14 @@ function verifySignature(
         .update(rawBody, 'utf8')
         .digest('hex')
 
-    return digest === signature
+    try {
+        const digestBuf = Buffer.from(digest, 'hex')
+        const sigBuf = Buffer.from(signature.replace(/^0x/, ''), 'hex')
+        if (digestBuf.length !== sigBuf.length) return false
+        return timingSafeEqual(digestBuf, sigBuf)
+    } catch {
+        return false
+    }
 }
 
 

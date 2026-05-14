@@ -12,12 +12,11 @@ export async function GET() {
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`futures:positions:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`futures:positions:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const db = createSupabaseAdminClient()
 
-        // ── Fetch open positions ───────────────────────────────────────────
         const { data: positions, error: posErr } = await db
             .from('futures_positions')
             .select('*')
@@ -34,14 +33,12 @@ export async function GET() {
             return NextResponse.json({ positions: [] })
         }
 
-        // ── Fetch live prices ──────────────────────────────────────────────
         let tickers: Record<string, any> = {}
         try {
             const sdk = await getGmxSdk()
             tickers = await sdk.oracle.getTickers()
         } catch { /* fall back to stored mark_price */ }
 
-        // ── Fetch pending SL/TP orders for these positions ─────────────────
         const positionIds = positions.map((p: any) => p.id)
         const { data: orders } = await db
             .from('futures_orders')
@@ -56,16 +53,15 @@ export async function GET() {
         for (const o of orders ?? []) {
             if (!ordersByPosition[o.position_id]) ordersByPosition[o.position_id] = {}
             if (o.order_type === 'stop_loss') {
-                ordersByPosition[o.position_id].stop_loss   = parseFloat(o.trigger_price)
+                ordersByPosition[o.position_id].stop_loss = parseFloat(o.trigger_price)
                 ordersByPosition[o.position_id].sl_order_id = o.id
             }
             if (o.order_type === 'take_profit') {
-                ordersByPosition[o.position_id].take_profit  = parseFloat(o.trigger_price)
-                ordersByPosition[o.position_id].tp_order_id  = o.id
+                ordersByPosition[o.position_id].take_profit = parseFloat(o.trigger_price)
+                ordersByPosition[o.position_id].tp_order_id = o.id
             }
         }
 
-        // ── Enrich positions + collect triggers ────────────────────────────
         type Trigger = { positionId: string; userId: string; markPrice: number; reason: 'closed' | 'liquidated' }
         const triggered: Trigger[] = []
 
@@ -77,29 +73,27 @@ export async function GET() {
                 ? (Number((BigInt(ticker.minPrice) + BigInt(ticker.maxPrice)) / BigInt(2)) / 1e30)
                 : pos.mark_price
 
-            const priceDiff     = pos.side === 'long'
+            const priceDiff = pos.side === 'long'
                 ? markPrice - pos.entry_price
                 : pos.entry_price - markPrice
             const unrealisedPnl = (priceDiff / pos.entry_price) * pos.size_usd
-            const pnlPct        = (priceDiff / pos.entry_price) * pos.leverage * 100
+            const pnlPct = (priceDiff / pos.entry_price) * pos.leverage * 100
 
-            // ── Liquidation check (highest priority) ──────────────────────
             const liqPrice = pos.liquidation_price ?? 0
             if (liqPrice && isLiquidated(pos.side, markPrice, liqPrice)) {
                 triggered.push({ positionId: pos.id, userId: pos.user_id, markPrice, reason: 'liquidated' })
-                return null // exclude from response — will be gone after liquidation
+                return null
             }
 
-            // ── SL/TP checks ──────────────────────────────────────────────
             const sltp = ordersByPosition[pos.id] ?? {}
             const slTriggered =
                 sltp.stop_loss !== undefined && (
-                    (pos.side === 'long'  && markPrice <= sltp.stop_loss) ||
+                    (pos.side === 'long' && markPrice <= sltp.stop_loss) ||
                     (pos.side === 'short' && markPrice >= sltp.stop_loss)
                 )
             const tpTriggered =
                 sltp.take_profit !== undefined && (
-                    (pos.side === 'long'  && markPrice >= sltp.take_profit) ||
+                    (pos.side === 'long' && markPrice >= sltp.take_profit) ||
                     (pos.side === 'short' && markPrice <= sltp.take_profit)
                 )
 
@@ -109,18 +103,17 @@ export async function GET() {
 
             return {
                 ...pos,
-                mark_price:       markPrice,
+                mark_price: markPrice,
                 liquidation_price: liqPrice,
-                unrealised_pnl:   parseFloat(unrealisedPnl.toFixed(2)),
-                pnl_pct:          parseFloat(pnlPct.toFixed(2)),
-                stop_loss:        sltp.stop_loss   ?? null,
-                take_profit:      sltp.take_profit ?? null,
-                sl_order_id:      sltp.sl_order_id ?? null,
-                tp_order_id:      sltp.tp_order_id ?? null,
+                unrealised_pnl: parseFloat(unrealisedPnl.toFixed(2)),
+                pnl_pct: parseFloat(pnlPct.toFixed(2)),
+                stop_loss: sltp.stop_loss ?? null,
+                take_profit: sltp.take_profit ?? null,
+                sl_order_id: sltp.sl_order_id ?? null,
+                tp_order_id: sltp.tp_order_id ?? null,
             }
         }).filter(Boolean)
 
-        // ── Fire-and-forget triggers ───────────────────────────────────────
         for (const { positionId, userId, markPrice, reason } of triggered) {
             closePosition(positionId, userId, markPrice, reason).catch((err) =>
                 console.error(`[futures/positions] ${reason} trigger failed for ${positionId}:`, err),

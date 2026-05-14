@@ -10,7 +10,7 @@ export async function GET(req: Request) {
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`futures:history:${user.id}`, LIMITS.MODERATE)
+        const rl = await checkRateLimit(`futures:history:${user.id}`, LIMITS.MODERATE)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)

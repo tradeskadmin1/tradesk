@@ -7,7 +7,7 @@ const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
 const KYC_BUCKET = 'kyc-documents'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 export async function POST(req: Request) {
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const rl = checkRateLimit(`kyc:submit:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`kyc:submit:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const adminClient = createSupabaseAdminClient()

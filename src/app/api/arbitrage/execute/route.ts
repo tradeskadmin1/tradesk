@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient, createSupabaseAdminClient as _createSupabaseAdminClient } from '@/lib/supabase-server'
 import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
 import { recordPlatformRevenue } from '@/lib/ledger'
+import { executeSameChainArb } from '@/lib/dex'
+import { getPair } from '@/config/pairs'
+import { TOKENS } from '@/config/tokens'
+import type { SupportedChainId } from '@/config/chains'
 
-// Platform takes 15 % of the net arbitrage profit as a service fee
 const PLATFORM_FEE_PCT = 0.15
 
 const createSupabaseAdminClient = (): any => _createSupabaseAdminClient()
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
         if (authError || !user)
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`arbitrage:execute:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`arbitrage:execute:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json().catch(() => ({}))
@@ -61,16 +64,45 @@ export async function POST(req: Request) {
 
         if (oppErr || !opp)
             return NextResponse.json({ error: 'Opportunity expired or not found' }, { status: 404 })
+
+
+        const { data: claimed } = await db.rpc('claim_arbitrage_opportunity', {
+            p_opportunity_id: opportunityId,
+            p_user_id: user.id,
+        })
+        if (!claimed)
+            return NextResponse.json(
+                { error: 'Opportunity has already been claimed or has expired' },
+                { status: 409 },
+            )
+
         const profitPct = parseFloat(opp.profit_pct)
         const gasUsd = parseFloat(opp.estimated_gas_usd)
-        if (profitPct > 0.05)
+        const sameChain = opp.buy_chain_id === opp.sell_chain_id
+        const MAX_ALLOWED_SPREAD = sameChain ? 0.05 : 0.10
+        if (profitPct > MAX_ALLOWED_SPREAD)
             return NextResponse.json(
                 { error: 'Opportunity data appears invalid — spread too high' },
                 { status: 400 },
             )
 
+
+        const MAX_DAILY_PROFIT_USD = 500
+        const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0)
+        const { data: dailyRows } = await db
+            .from('arbitrage_trades')
+            .select('net_profit_usd')
+            .eq('user_id', user.id)
+            .gte('created_at', todayStart.toISOString())
+        const dailyEarned = (dailyRows ?? []).reduce((s: number, r: any) => s + parseFloat(r.net_profit_usd ?? 0), 0)
+        if (dailyEarned >= MAX_DAILY_PROFIT_USD)
+            return NextResponse.json(
+                { error: `Daily profit limit of $${MAX_DAILY_PROFIT_USD} reached. Try again tomorrow.` },
+                { status: 429 },
+            )
+
         const grossProfit = amount * profitPct
-        const preFeeProfitUsd = grossProfit - gasUsd   // profit after gas, before platform fee
+        const preFeeProfitUsd = grossProfit - gasUsd
 
         if (preFeeProfitUsd <= 0)
             return NextResponse.json(
@@ -78,9 +110,7 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
 
-        const platformFeeUsd = preFeeProfitUsd * PLATFORM_FEE_PCT
-        const netProfit = preFeeProfitUsd - platformFeeUsd
-
+        // ── Find user's funding balance (USDC or USDT) ────────────────────────
         const { data: balances } = await db
             .from('ledger_balances')
             .select('chain_id, token_symbol, token_address, balance')
@@ -88,7 +118,6 @@ export async function POST(req: Request) {
             .gte('balance', amount.toString())
 
         const available: { chainId: number; tokenSymbol: string; tokenAddress: string }[] = []
-
         for (const chainId of CHAIN_PRIORITY) {
             for (const ft of FUNDING_TOKENS) {
                 const addr = (ft.addresses as Record<number, string>)[chainId]
@@ -99,9 +128,7 @@ export async function POST(req: Request) {
                         b.token_address.toLowerCase() === addr.toLowerCase() &&
                         parseFloat(b.balance) >= amount,
                 )
-                if (row) {
-                    available.push({ chainId, tokenSymbol: ft.symbol, tokenAddress: addr })
-                }
+                if (row) available.push({ chainId, tokenSymbol: ft.symbol, tokenAddress: addr })
             }
         }
 
@@ -113,42 +140,116 @@ export async function POST(req: Request) {
 
         const { chainId: fundChainId, tokenSymbol: fundSymbol, tokenAddress: fundAddress } = available[0]
 
-        const { error: debitErr } = await db.rpc('debit_balance', {
-            p_user_id: user.id,
-            p_chain_id: fundChainId,
-            p_token_symbol: fundSymbol,
-            p_token_address: fundAddress,
-            p_amount: amount.toFixed(6),
-            p_type: 'trade_buy',
-            p_ref_id: opportunityId,
-            p_note: `Arb: ${opp.pair} ${opp.buy_dex}→${opp.sell_dex}`,
-        })
+        // ── Determine if this is a same-chain or cross-chain opportunity ───────
+        const isSameChain = opp.buy_chain_id === opp.sell_chain_id
 
+        // Resolve the base token being arbitraged (e.g. 'LINK' from 'LINK_USDC')
+        const pairConfig  = getPair(opp.pair)
+        const baseToken   = pairConfig?.base ?? opp.pair.split('_')[0]
+
+        let actualNetProfit = preFeeProfitUsd * (1 - PLATFORM_FEE_PCT)
+        let buyTxHash: string | null  = null
+        let sellTxHash: string | null = null
+        let executionMode: 'on-chain' | 'simulated' = isSameChain ? 'on-chain' : 'simulated'
+
+        // ── Debit user's capital before execution ─────────────────────────────
+        const { error: debitErr } = await db.rpc('debit_balance', {
+            p_user_id:       user.id,
+            p_chain_id:      fundChainId,
+            p_token_symbol:  fundSymbol,
+            p_token_address: fundAddress,
+            p_amount:        amount.toFixed(6),
+            p_type:          'trade_buy',
+            p_ref_id:        opportunityId,
+            p_note:          `Arb: ${opp.pair} ${opp.buy_dex}→${opp.sell_dex}`,
+        })
         if (debitErr)
             return NextResponse.json({ error: 'Failed to debit balance' }, { status: 500 })
 
-        const returnAmount = amount + netProfit
-        await db.rpc('credit_balance', {
-            p_user_id: user.id,
-            p_chain_id: fundChainId,
-            p_token_symbol: fundSymbol,
-            p_token_address: fundAddress,
-            p_amount: returnAmount.toFixed(6),
-            p_type: 'trade_sell',
-            p_ref_id: opportunityId,
-            p_note: `Arb profit: ${opp.pair} +$${netProfit.toFixed(2)} (platform fee $${platformFeeUsd.toFixed(2)})`,
-        })
+        if (isSameChain) {
+            // ── SAME-CHAIN: execute both legs on-chain ────────────────────────
+            // Leg 1: buy baseToken (e.g. USDC → LINK on the cheaper DEX)
+            // Leg 2: sell baseToken (e.g. LINK → USDC on the expensive DEX)
+            // 0x smart routing naturally finds the best price on each call,
+            // capturing the spread between the two pools.
+            try {
+                const arbResult = await executeSameChainArb({
+                    userId:      user.id,
+                    chainId:     opp.buy_chain_id as SupportedChainId,
+                    baseToken,
+                    quoteToken:  fundSymbol,
+                    sellAmount:  amount.toFixed(6),
+                })
 
-        // Record platform revenue
-        await recordPlatformRevenue({
-            source: 'arbitrage',
-            userId: user.id,
-            refId: opportunityId,
-            amount: platformFeeUsd,
-            tokenSymbol: fundSymbol,
-            chainId: fundChainId,
-            note: `Arb fee (15%): ${opp.pair} ${opp.buy_dex}→${opp.sell_dex}`,
-        })
+                buyTxHash  = arbResult.buyTxHash
+                sellTxHash = arbResult.sellTxHash
+
+                // Calculate actual P&L from what was received vs what was sent
+                const actualOut      = parseFloat(arbResult.amountOut)
+                const actualGross    = actualOut - amount
+                const platformFeeAct = Math.max(0, actualGross) * PLATFORM_FEE_PCT
+                actualNetProfit      = actualGross - platformFeeAct
+
+                // Credit actual proceeds (amount returned + real profit after fee)
+                const returnAmount = actualOut - platformFeeAct
+                await db.rpc('credit_balance', {
+                    p_user_id:       user.id,
+                    p_chain_id:      fundChainId,
+                    p_token_symbol:  fundSymbol,
+                    p_token_address: fundAddress,
+                    p_amount:        Math.max(0, returnAmount).toFixed(6),
+                    p_type:          'trade_sell',
+                    p_ref_id:        opportunityId,
+                    p_note:          `Arb profit: ${opp.pair} actual net +$${actualNetProfit.toFixed(2)}`,
+                })
+
+                await recordPlatformRevenue({
+                    source: 'arbitrage', userId: user.id, refId: opportunityId,
+                    amount: platformFeeAct, tokenSymbol: fundSymbol, chainId: fundChainId,
+                    note: `Arb fee (15%): ${opp.pair} same-chain`,
+                })
+            } catch (execErr: any) {
+                // On-chain execution failed — refund the user's capital
+                await db.rpc('credit_balance', {
+                    p_user_id: user.id, p_chain_id: fundChainId,
+                    p_token_symbol: fundSymbol, p_token_address: fundAddress,
+                    p_amount: amount.toFixed(6), p_type: 'trade_sell',
+                    p_ref_id: opportunityId, p_note: 'Arb execution failed — refunded',
+                })
+                console.error('[arb/execute] same-chain execution failed:', execErr)
+                return NextResponse.json(
+                    { error: `On-chain execution failed: ${execErr.message}` },
+                    { status: 500 },
+                )
+            }
+        } else {
+            // ── CROSS-CHAIN: platform-mediated (bridge infra not yet live) ────
+            // Buy on chain A and sell on chain B requires bridging infrastructure.
+            // For now the platform credits the estimated profit to the user and
+            // executes the rebalance internally. Actual cross-chain execution
+            // (Stargate/LayerZero bridge) will be added in a future release.
+            const platformFeeUsd = preFeeProfitUsd * PLATFORM_FEE_PCT
+            actualNetProfit      = preFeeProfitUsd - platformFeeUsd
+
+            await db.rpc('credit_balance', {
+                p_user_id:       user.id,
+                p_chain_id:      fundChainId,
+                p_token_symbol:  fundSymbol,
+                p_token_address: fundAddress,
+                p_amount:        (amount + actualNetProfit).toFixed(6),
+                p_type:          'trade_sell',
+                p_ref_id:        opportunityId,
+                p_note:          `Cross-chain arb: ${opp.pair} +$${actualNetProfit.toFixed(2)}`,
+            })
+
+            await recordPlatformRevenue({
+                source: 'arbitrage', userId: user.id, refId: opportunityId,
+                amount: platformFeeUsd, tokenSymbol: fundSymbol, chainId: fundChainId,
+                note: `Arb fee (15%): ${opp.pair} cross-chain`,
+            })
+        }
+
+        const platformFeeUsd = preFeeProfitUsd * PLATFORM_FEE_PCT
 
         await db.from('arbitrage_trades').insert({
             user_id: user.id,
@@ -164,19 +265,22 @@ export async function POST(req: Request) {
             gross_profit_usd: grossProfit.toFixed(2),
             gas_cost_usd: gasUsd.toFixed(2),
             platform_fee_usd: platformFeeUsd.toFixed(2),
-            net_profit_usd: netProfit.toFixed(2),
+            net_profit_usd: actualNetProfit.toFixed(2),
             status: 'completed',
         })
 
         return NextResponse.json({
             success: true,
+            executionMode,
             pair: opp.pair,
             tradeAmountUsd: amount,
             grossProfitUsd: parseFloat(grossProfit.toFixed(2)),
             gasCostUsd: parseFloat(gasUsd.toFixed(2)),
             platformFeeUsd: parseFloat(platformFeeUsd.toFixed(2)),
-            netProfitUsd: parseFloat(netProfit.toFixed(2)),
+            netProfitUsd: parseFloat(actualNetProfit.toFixed(2)),
             fundedWith: `${fundSymbol} on chain ${fundChainId}`,
+            ...(buyTxHash  ? { buyTxHash }  : {}),
+            ...(sellTxHash ? { sellTxHash } : {}),
         })
     } catch (err) {
         console.error('[POST /api/arbitrage/execute]', err)

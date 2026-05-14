@@ -267,3 +267,115 @@ export async function executeTrade(req: ExecuteTradeRequest): Promise<ExecuteTra
         dexUsed,
     }
 }
+
+
+// ── Same-chain arbitrage ───────────────────────────────────────────────────────
+// Executes two real on-chain swaps from the user's custodial wallet:
+//   Leg 1: quoteToken → baseToken  (buy the arb asset on the cheap DEX)
+//   Leg 2: baseToken  → quoteToken (sell the arb asset on the expensive DEX)
+// Returns actual amounts in/out so the caller can compute real P&L.
+
+export interface SameChainArbResult {
+    buyTxHash:       string
+    sellTxHash:      string
+    amountIn:        string   // quoteToken spent (human)
+    amountOut:       string   // quoteToken received (human)
+    baseTokenBought: string   // baseToken received from leg 1 (human)
+    dexBuy:          string
+    dexSell:         string
+}
+
+export async function executeSameChainArb(params: {
+    userId:      string
+    chainId:     SupportedChainId
+    baseToken:   string   // the token being arbitraged, e.g. 'LINK'
+    quoteToken:  string   // the funding stable, e.g. 'USDC'
+    sellAmount:  string   // amount of quoteToken to deploy (human-readable)
+    slippageBps?: number
+}): Promise<SameChainArbResult> {
+    const { userId, chainId, baseToken, quoteToken, sellAmount, slippageBps = 50 } = params
+
+    const chain       = CHAIN_MAP[chainId]
+    const chainConfig = getChainConfig(chainId)
+    const rpcUrl      = process.env[chainConfig.rpcEnvKey] ?? chainConfig.publicRpcFallback
+    let   privateKey  = await loadPrivateKey(userId, chainId)
+    const account     = privateKeyToAccount(privateKey as `0x${string}`)
+
+    const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) })
+    const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
+
+    // ── Leg 1: quoteToken → baseToken ────────────────────────────────────────
+    const buyQuote = await getQuote({
+        chainId,
+        sellToken:    quoteToken,
+        buyToken:     baseToken,
+        sellAmount,
+        takerAddress: account.address,
+        slippageBps,
+    })
+
+    const quoteTokenAddress = resolveTokenAddress(quoteToken, chainId)
+    if (quoteTokenAddress !== NATIVE_TOKEN_ADDRESS) {
+        await ensureERC20Approval(
+            quoteTokenAddress as `0x${string}`,
+            account.address,
+            chainId,
+            privateKey,
+            BigInt(buyQuote.sellAmount),
+        )
+    }
+
+    const buyTxHash = await walletClient.sendTransaction({
+        to:       buyQuote.transaction.to as `0x${string}`,
+        data:     buyQuote.transaction.data as `0x${string}`,
+        value:    BigInt(buyQuote.transaction.value ?? '0'),
+        gas:      BigInt(buyQuote.transaction.gas),
+        gasPrice: BigInt(buyQuote.transaction.gasPrice),
+    })
+    await publicClient.waitForTransactionReceipt({ hash: buyTxHash, timeout: 120_000 })
+
+    const baseTokenBought = buyQuote.buyAmountHuman
+
+    // ── Leg 2: baseToken → quoteToken ────────────────────────────────────────
+    const sellQuote = await getQuote({
+        chainId,
+        sellToken:    baseToken,
+        buyToken:     quoteToken,
+        sellAmount:   baseTokenBought,
+        takerAddress: account.address,
+        slippageBps,
+    })
+
+    const baseTokenAddress = resolveTokenAddress(baseToken, chainId)
+    if (baseTokenAddress !== NATIVE_TOKEN_ADDRESS) {
+        await ensureERC20Approval(
+            baseTokenAddress as `0x${string}`,
+            account.address,
+            chainId,
+            privateKey,
+            BigInt(sellQuote.sellAmount),
+        )
+    }
+
+    const sellTxHash = await walletClient.sendTransaction({
+        to:       sellQuote.transaction.to as `0x${string}`,
+        data:     sellQuote.transaction.data as `0x${string}`,
+        value:    BigInt(sellQuote.transaction.value ?? '0'),
+        gas:      BigInt(sellQuote.transaction.gas),
+        gasPrice: BigInt(sellQuote.transaction.gasPrice),
+    })
+    await publicClient.waitForTransactionReceipt({ hash: sellTxHash, timeout: 120_000 })
+
+    // Zero out key material
+    privateKey = '0'.repeat(privateKey.length)
+
+    return {
+        buyTxHash,
+        sellTxHash,
+        amountIn:        buyQuote.sellAmountHuman,
+        amountOut:       sellQuote.buyAmountHuman,
+        baseTokenBought,
+        dexBuy:          buyQuote.route[0]?.type  ?? '0x',
+        dexSell:         sellQuote.route[0]?.type ?? '0x',
+    }
+}

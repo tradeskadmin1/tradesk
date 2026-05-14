@@ -42,14 +42,18 @@ function derivePrivateKey(
 }
 
 
+/**
+ * Returns the next unique wallet account index from a DB-side sequence.
+ *
+ * Using a sequence (via RPC) instead of COUNT(*) prevents a race condition
+ * where two simultaneous onboarding requests both read the same count and
+ * derive the same HD path, producing colliding wallet addresses.
+ */
 async function getNextAccountIndex(): Promise<number> {
     const supabase = createSupabaseAdminClient()
-    const { count, error } = await supabase
-        .from('custodial_wallets')
-        .select('*', { count: 'exact', head: true })
-
-    if (error) throw new Error(`[wallet] Failed to get account index: ${error.message}`)
-    return count ?? 0
+    const { data, error } = await supabase.rpc('next_wallet_index')
+    if (error) throw new Error(`[wallet] Failed to get next wallet index: ${error.message}`)
+    return data as number
 }
 
 

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
         const { data: { user }, error: authErr } = await supabase.auth.getUser()
         if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const rl = checkRateLimit(`futures:open:${user.id}`, LIMITS.STRICT)
+        const rl = await checkRateLimit(`futures:open:${user.id}`, LIMITS.STRICT)
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const body = await req.json()
@@ -86,7 +86,6 @@ export async function POST(req: Request) {
             note: `Futures open fee: ${side} ${symbol}/USD — $${openFee.toFixed(2)}`,
         })
 
-        // Credit the fee to platform revenue
         await recordPlatformRevenue({
             source: 'futures_open',
             userId: user.id,
