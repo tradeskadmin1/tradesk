@@ -8,11 +8,11 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 const CHAINS = [
-  { key: "1",      id: 1,      name: "Ethereum", color: "#627eea", symbol: "ETH", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
-  { key: "56",     id: 56,     name: "BNB Chain", color: "#F0B90B", symbol: "BNB", tokens: ["BNB", "USDT", "USDC"] },
-  { key: "42161",  id: 42161,  name: "Arbitrum", color: "#28a0f0", symbol: "ARB", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
-  { key: "btc",    id: null,   name: "Bitcoin", color: "#F7931A", symbol: "BTC", tokens: ["BTC"] },
-  { key: "trx",    id: null,   name: "Tron", color: "#FF0013", symbol: "TRX", tokens: ["USDT (TRC-20)", "TRX"] },
+  { key: "1",      id: 1,      name: "Ethereum", color: "#627eea", symbol: "ETH", logo: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",                          tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
+  { key: "56",     id: 56,     name: "BNB Chain", color: "#F0B90B", symbol: "BNB", logo: "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png",                    tokens: ["BNB", "USDT", "USDC"] },
+  { key: "42161",  id: 42161,  name: "Arbitrum", color: "#28a0f0", symbol: "ARB", logo: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg",     tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { key: "btc",    id: null,   name: "Bitcoin", color: "#F7931A", symbol: "BTC", logo: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",                             tokens: ["BTC"] },
+  { key: "trx",    id: null,   name: "Tron", color: "#FF0013", symbol: "TRX", logo: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",                           tokens: ["USDT (TRC-20)", "TRX"] },
 ]
 
 export default function DepositPage() {
@@ -127,8 +127,21 @@ export default function DepositPage() {
                         onClick={() => handleChainSelect(c.key)}
                         className={`flex items-center gap-4 px-5 py-4 rounded-xl border font-mono text-left transition-all cursor-pointer ${active ? "border-[#FF5733]/50 bg-[#FF5733]/5" : "border-[#2e2520] bg-[#1a1410] hover:border-[#3a2520]"}`}
                       >
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${c.color}20`, border: `1px solid ${c.color}40` }}>
-                          <div className="w-3 h-3 rounded-full" style={{ background: c.color }} />
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: `${c.color}20`, border: `1px solid ${c.color}40` }}>
+                          <img
+                            src={c.logo}
+                            alt={c.name}
+                            width={28}
+                            height={28}
+                            className="rounded-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              target.style.display = "none"
+                              const fallback = target.nextElementSibling as HTMLElement | null
+                              if (fallback) fallback.style.display = "block"
+                            }}
+                          />
+                          <div className="w-4 h-4 rounded-full hidden" style={{ background: c.color }} />
                         </div>
                         <div className="flex-1">
                           <div className="text-white text-[14px] font-bold">{c.name}</div>
