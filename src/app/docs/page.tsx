@@ -170,12 +170,6 @@ export default function DocsPage() {
                         <span className="hidden sm:block text-[11px] font-mono text-[#4a3a2a] border border-[#2e2520] rounded-full px-3 py-1">
                             v1.0
                         </span>
-                        <Link
-                            href="/auth"
-                            className="text-[13px] font-mono bg-[#FF5733] hover:bg-[#ff6a4d] text-white px-4 py-1.5 rounded-lg transition-colors"
-                        >
-                            Launch App →
-                        </Link>
                     </div>
                 </div>
             </header>
@@ -687,11 +681,8 @@ export default function DocsPage() {
                     ))}
 
                     {/* Footer spacer */}
-                    <div className="h-24 border-t border-[#2e2520] mt-10 pt-8 flex items-center justify-between">
+                    <div className="h-24 border-t border-[#2e2520] mt-10 pt-8 flex items-center">
                         <span className="text-[12px] text-[#4a3a2a] font-mono">Tradesk Docs · v1.0</span>
-                        <Link href="/auth" className="text-[13px] font-mono text-[#FF5733] hover:underline">
-                            Launch App →
-                        </Link>
                     </div>
 
                 </main>
