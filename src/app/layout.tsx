@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import PublicNav from './components/public-shell'
 import FooterShell from './components/footer-shell'
 import Web3bgClient from './components/web3bg-client'
+import CrispChat from './components/crisp-chat'
 
 const syne = Syne({
   subsets: ['latin'],
@@ -110,6 +111,7 @@ export default function RootLayout({
             {children}
           </main>
           <FooterShell />
+          <CrispChat />
         </Providers>
       </body>
     </html>
