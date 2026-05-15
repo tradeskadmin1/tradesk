@@ -2,17 +2,23 @@
 
 import { useEffect } from "react"
 
-export default function CrispChat() {
+export default function TawkChat() {
     useEffect(() => {
-        const websiteId = process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID
-        if (!websiteId) return
+        const propertyId = process.env.NEXT_PUBLIC_TAWK_PROPERTY_ID
+        const widgetId   = process.env.NEXT_PUBLIC_TAWK_WIDGET_ID
 
-        // Dynamically import to avoid SSR issues
-        import("crisp-sdk-web").then(({ Crisp }) => {
-            Crisp.configure(websiteId, {
-                autoload: true,
-            })
-        })
+        if (!propertyId || !widgetId) return
+
+        const s1 = document.createElement("script")
+        s1.async = true
+        s1.src   = `https://embed.tawk.to/${propertyId}/${widgetId}`
+        s1.charset = "UTF-8"
+        s1.setAttribute("crossorigin", "*")
+        document.head.appendChild(s1)
+
+        return () => {
+            document.head.removeChild(s1)
+        }
     }, [])
 
     return null
