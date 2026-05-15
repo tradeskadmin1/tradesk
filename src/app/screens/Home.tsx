@@ -1,21 +1,47 @@
 "use client"
 
 import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+
+interface Ticker {
+    pair: string
+    price: string
+    change: string
+    up: boolean
+}
+
+const FALLBACK_TICKERS: Ticker[] = [
+    { pair: "ETH/USDC",   price: "—",  change: "—",     up: true  },
+    { pair: "BTC/USDT",   price: "—",  change: "—",     up: true  },
+    { pair: "BNB/USDT",   price: "—",  change: "—",     up: true  },
+    { pair: "ARB/USDC",   price: "—",  change: "—",     up: true  },
+    { pair: "LINK/USDC",  price: "—",  change: "—",     up: true  },
+    { pair: "AAVE/USDC",  price: "—",  change: "—",     up: true  },
+    { pair: "MATIC/USDT", price: "—",  change: "—",     up: true  },
+    { pair: "UNI/USDT",   price: "—",  change: "—",     up: true  },
+]
 
 export default function HomeScreen() {
 
     const router = useRouter();
+    const [tickers, setTickers] = useState<Ticker[]>(FALLBACK_TICKERS)
 
-    const tickers = [
-        { pair: "ETH/USDC", price: "$3,241.80", change: "+2.14%", up: true },
-        { pair: "BTC/USDT", price: "$67,420.00", change: "+0.87%", up: true },
-        { pair: "SOL/USDC", price: "$182.40", change: "-1.23%", up: false },
-        { pair: "ARB/ETH", price: "$1.087", change: "+3.50%", up: true },
-        { pair: "OP/USDC", price: "$2.34", change: "-0.44%", up: false },
-        { pair: "MATIC/USDC", price: "$0.884", change: "+1.76%", up: true },
-        { pair: "LINK/ETH", price: "$14.22", change: "+4.02%", up: true },
-        { pair: "AAVE/USDC", price: "$96.50", change: "-2.10%", up: false },
-    ];
+    useEffect(() => {
+        const fetchTickers = async () => {
+            try {
+                const res = await fetch("/api/public/ticker")
+                if (!res.ok) return
+                const data = await res.json()
+                if (data.tickers?.length) setTickers(data.tickers)
+            } catch {
+                // keep fallback values
+            }
+        }
+
+        fetchTickers()
+        const interval = setInterval(fetchTickers, 30_000)
+        return () => clearInterval(interval)
+    }, [])
     const tabs = ["Spot", "Perps", "Options", "Yield"];
     const markets = [
         { name: "ETH/USDC", change: "+2.1%", up: true, active: true },
