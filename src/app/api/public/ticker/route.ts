@@ -4,12 +4,12 @@ import { checkRateLimit, LIMITS, rlResponse, clientIp } from '@/lib/rate-limit'
 // Pairs shown in the homepage ticker — subset of supported pairs
 // that have the highest name recognition for visitors
 const TICKER_SYMBOLS = [
-    { pair: 'ETH/USDC',  symbol: 'ETHUSDC'  },
+    { pair: 'ETH/USDT',  symbol: 'ETHUSDT'  },
     { pair: 'BTC/USDT',  symbol: 'BTCUSDT'  },
     { pair: 'BNB/USDT',  symbol: 'BNBUSDT'  },
-    { pair: 'ARB/USDC',  symbol: 'ARBUSDC'  },
-    { pair: 'LINK/USDC', symbol: 'LINKUSDC' },
-    { pair: 'AAVE/USDC', symbol: 'AAVEUSDC' },
+    { pair: 'ARB/USDT',  symbol: 'ARBUSDT'  },
+    { pair: 'LINK/USDT', symbol: 'LINKUSDT' },
+    { pair: 'AAVE/USDT', symbol: 'AAVEUSDT' },
     { pair: 'MATIC/USDT',symbol: 'MATICUSDT'},
     { pair: 'UNI/USDT',  symbol: 'UNIUSDT'  },
 ]

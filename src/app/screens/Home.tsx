@@ -11,14 +11,14 @@ interface Ticker {
 }
 
 const FALLBACK_TICKERS: Ticker[] = [
-    { pair: "ETH/USDC",   price: "—",  change: "—",     up: true  },
-    { pair: "BTC/USDT",   price: "—",  change: "—",     up: true  },
-    { pair: "BNB/USDT",   price: "—",  change: "—",     up: true  },
-    { pair: "ARB/USDC",   price: "—",  change: "—",     up: true  },
-    { pair: "LINK/USDC",  price: "—",  change: "—",     up: true  },
-    { pair: "AAVE/USDC",  price: "—",  change: "—",     up: true  },
-    { pair: "MATIC/USDT", price: "—",  change: "—",     up: true  },
-    { pair: "UNI/USDT",   price: "—",  change: "—",     up: true  },
+    { pair: "ETH/USDT",   price: "—", change: "—", up: true },
+    { pair: "BTC/USDT",   price: "—", change: "—", up: true },
+    { pair: "BNB/USDT",   price: "—", change: "—", up: true },
+    { pair: "ARB/USDT",   price: "—", change: "—", up: true },
+    { pair: "LINK/USDT",  price: "—", change: "—", up: true },
+    { pair: "AAVE/USDT",  price: "—", change: "—", up: true },
+    { pair: "MATIC/USDT", price: "—", change: "—", up: true },
+    { pair: "UNI/USDT",   price: "—", change: "—", up: true },
 ]
 
 export default function HomeScreen() {
