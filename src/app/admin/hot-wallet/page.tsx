@@ -24,6 +24,19 @@ interface WalletInfo {
     tokens: TokenBalance[]
 }
 
+interface CustodialToken {
+    symbol: string
+    balance: number
+}
+
+interface CustodialChain {
+    chain: string
+    chainName: string
+    chainId: number
+    tokens: CustodialToken[]
+    pendingWithdrawals: number
+}
+
 function fmt(n: number, decimals = 4) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: decimals })
 }
@@ -240,8 +253,75 @@ function WalletCard({
 }
 
 
+// ─── Custodial (BTC / TRX) card ───────────────────────────────────────────────
+function CustodialCard({ chain }: { chain: CustodialChain }) {
+    const CHAIN_ICON: Record<string, string> = {
+        btc: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+        trx: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+    }
+
+    return (
+        <div className="bg-[#0e0a08] border border-[#2e2520] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#2e2520] flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={CHAIN_ICON[chain.chain]}
+                        alt={chain.chainName}
+                        width={20} height={20}
+                        className="rounded-full object-cover"
+                    />
+                    <div>
+                        <h3 className="text-white font-semibold text-sm">{chain.chainName}</h3>
+                        <p className="text-[10px] text-[#4a3a2a]">HD-derived custodial wallets — manually signed</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {chain.pendingWithdrawals > 0 && (
+                        <span className="text-[10px] bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-0.5 rounded-full font-semibold">
+                            {chain.pendingWithdrawals} pending
+                        </span>
+                    )}
+                    <span className="text-[10px] bg-[#2a1a0a] text-[#f97316] px-2 py-0.5 rounded-full font-semibold">
+                        CUSTODIAL
+                    </span>
+                </div>
+            </div>
+
+            <div className="divide-y divide-[#1a1210]">
+                {chain.tokens.map((t) => (
+                    <div key={t.symbol} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                            <p className="text-sm text-white font-semibold">{t.symbol}</p>
+                            <p className="text-[10px] text-[#4a3a2a]">Total user holdings (ledger)</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm text-white font-mono">{fmt(t.balance, 8)}</span>
+                            <span
+                                className="px-2.5 py-1 rounded text-xs font-semibold text-[#4a3a2a] bg-[#1a1210] border border-[#2e2520] cursor-not-allowed select-none"
+                                title="BTC/TRX sends are processed manually via the Withdrawals panel"
+                            >
+                                Manual
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="px-4 py-2.5 border-t border-[#1a1210] bg-[#0a0806]">
+                <p className="text-[10px] text-[#4a3a2a] leading-relaxed">
+                    Withdrawals for this chain require manual signing. Review and action them in the{' '}
+                    <a href="/admin/withdrawals" className="text-[#FF5733] hover:underline">Withdrawals</a> panel.
+                </p>
+            </div>
+        </div>
+    )
+}
+
+
 export default function HotWalletPage() {
     const [wallets, setWallets] = useState<WalletInfo[]>([])
+    const [custodial, setCustodial] = useState<CustodialChain[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [sending, setSending] = useState<{ wallet: WalletInfo; token: TokenBalance | null } | null>(null)
@@ -250,10 +330,23 @@ export default function HotWalletPage() {
         setLoading(true)
         setError(null)
         try {
-            const res = await fetch('/api/admin/hot-wallet')
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error ?? 'Failed to load')
-            setWallets(data.wallets)
+            const [evmRes, custodialRes] = await Promise.all([
+                fetch('/api/admin/hot-wallet'),
+                fetch('/api/admin/hot-wallet/custodial'),
+            ])
+
+            if (!evmRes.ok) {
+                const data = await evmRes.json()
+                throw new Error(data.error ?? 'Failed to load EVM wallets')
+            }
+
+            const evmData = await evmRes.json()
+            setWallets(evmData.wallets ?? [])
+
+            if (custodialRes.ok) {
+                const custodialData = await custodialRes.json()
+                setCustodial(custodialData.custodial ?? [])
+            }
         } catch (e: any) {
             setError(e.message)
         } finally {
@@ -273,6 +366,8 @@ export default function HotWalletPage() {
         return sum + (usdt?.balance ?? 0)
     }, 0)
 
+    const totalPending = custodial.reduce((sum, c) => sum + c.pendingWithdrawals, 0)
+
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <div className="flex gap-1.5">
@@ -291,12 +386,22 @@ export default function HotWalletPage() {
                     <h1 className="text-xl font-bold text-white">Hot Wallet</h1>
                     <p className="text-xs text-[#7a6a5a] mt-0.5">On-chain balances across all platform wallets</p>
                 </div>
-                <button
-                    onClick={load}
-                    className="px-3 py-1.5 rounded-md bg-[#1a1210] border border-[#2e2520] text-xs text-[#7a6a5a] hover:text-white transition-colors"
-                >
-                    ↻ Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                    {totalPending > 0 && (
+                        <a
+                            href="/admin/withdrawals"
+                            className="text-[10px] bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2.5 py-1 rounded-full font-semibold hover:bg-amber-400/20 transition-colors"
+                        >
+                            {totalPending} pending withdrawal{totalPending !== 1 ? 's' : ''}
+                        </a>
+                    )}
+                    <button
+                        onClick={load}
+                        className="px-3 py-1.5 rounded-md bg-[#1a1210] border border-[#2e2520] text-xs text-[#7a6a5a] hover:text-white transition-colors"
+                    >
+                        ↻ Refresh
+                    </button>
+                </div>
             </div>
 
             {error && (
@@ -305,37 +410,58 @@ export default function HotWalletPage() {
                 </div>
             )}
 
+            {/* Summary cards */}
             {wallets.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#0e0a08] border border-[#2e2520] rounded-xl p-4">
                         <p className="text-xs text-[#7a6a5a] mb-1">Total USDC</p>
                         <p className="text-2xl font-bold text-white">${fmt(totalUsdc)}</p>
-                        <p className="text-[10px] text-[#4a3a2a] mt-0.5">across all chains</p>
+                        <p className="text-[10px] text-[#4a3a2a] mt-0.5">across EVM chains</p>
                     </div>
                     <div className="bg-[#0e0a08] border border-[#2e2520] rounded-xl p-4">
                         <p className="text-xs text-[#7a6a5a] mb-1">Total USDT</p>
                         <p className="text-2xl font-bold text-white">${fmt(totalUsdt)}</p>
-                        <p className="text-[10px] text-[#4a3a2a] mt-0.5">across all chains</p>
+                        <p className="text-[10px] text-[#4a3a2a] mt-0.5">across EVM chains</p>
                     </div>
                 </div>
             )}
 
             {wallets.length === 0 && !error ? (
                 <div className="bg-[#0e0a08] border border-[#2e2520] rounded-xl p-8 text-center">
-                    <p className="text-sm text-[#7a6a5a]">No hot wallets initialized.</p>
+                    <p className="text-sm text-[#7a6a5a]">No EVM hot wallets initialized.</p>
                     <p className="text-xs text-[#4a3a2a] mt-1">
                         Call <code className="text-[#FF5733]">POST /api/admin/init-platform-wallets</code> first.
                     </p>
                 </div>
             ) : (
                 <div className="flex flex-col gap-4">
-                    {wallets.map((w) => (
-                        <WalletCard
-                            key={w.chainId}
-                            wallet={w}
-                            onSend={(wallet, token) => setSending({ wallet, token })}
-                        />
-                    ))}
+                    {/* EVM wallets */}
+                    {wallets.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#4a3a2a] px-1">
+                                EVM — On-chain
+                            </p>
+                            {wallets.map((w) => (
+                                <WalletCard
+                                    key={w.chainId}
+                                    wallet={w}
+                                    onSend={(wallet, token) => setSending({ wallet, token })}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Custodial BTC / TRX wallets */}
+                    {custodial.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#4a3a2a] px-1">
+                                Non-EVM — Custodial
+                            </p>
+                            {custodial.map((c) => (
+                                <CustodialCard key={c.chain} chain={c} />
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -12,6 +12,7 @@ const mainNav = [
     { label: "Scanner",   path: "/dashboard/scanner" },
     { label: "Portfolio", path: "/dashboard/portfolio" },
     { label: "Alerts",    path: "/dashboard/alerts" },
+    { label: "KYC",      path: "/dashboard/kyc" },
 ]
 
 const tradeNav = [

@@ -24,6 +24,8 @@ const CHAIN_NAME: Record<number, string> = {
     1: "Ethereum",
     56: "BNB Chain",
     42161: "Arbitrum",
+    0: "Bitcoin",
+    728126428: "Tron",
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -266,7 +268,7 @@ export default function AdminWithdrawalsPage() {
                                                 </button>
                                             </>
                                         ) : w.status === "rejected" && w.rejection_reason ? (
-                                            <span className="font-mono text-[10px] text-[#4a3a2a] italic truncate max-w-[110px]" title={w.rejection_reason}>
+                                            <span className="font-mono text-[10px] text-[#4a3a2a] italic truncate max-w-27.5" title={w.rejection_reason}>
                                                 {w.rejection_reason}
                                             </span>
                                         ) : w.tx_hash ? (
