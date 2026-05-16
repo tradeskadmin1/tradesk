@@ -7,22 +7,51 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 const CHAINS = [
-  { id: 1, name: "Ethereum", color: "#627eea", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
-  { id: 56, name: "BNB Chain", color: "#F0B90B", tokens: ["BNB", "USDT", "USDC"] },
-  { id: 42161, name: "Arbitrum", color: "#28a0f0", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { key: "1", chainId: 1, name: "Ethereum", color: "#627eea", logo: "https://assets.coingecko.com/coins/images/279/small/ethereum.png", isEvm: true, tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
+  { key: "56", chainId: 56, name: "BNB Chain", color: "#F0B90B", logo: "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png", isEvm: true, tokens: ["BNB", "USDT", "USDC"] },
+  { key: "42161", chainId: 42161, name: "Arbitrum", color: "#28a0f0", logo: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg", isEvm: true, tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { key: "btc", chainId: null, name: "Bitcoin", color: "#F7931A", logo: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png", isEvm: false, tokens: ["BTC"] },
+  { key: "trx", chainId: null, name: "Tron", color: "#FF0013", logo: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png", isEvm: false, tokens: ["TRX", "USDT"] },
 ]
+
+function validateAddress(address: string, chainKey: string): boolean {
+  if (chainKey === "btc") return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(address)
+  if (chainKey === "trx") return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)
+  return /^0x[0-9a-fA-F]{40}$/.test(address)
+}
+
+function addressPlaceholder(chainKey: string): string {
+  if (chainKey === "btc") return "bc1q… or 1… or 3…"
+  if (chainKey === "trx") return "T…"
+  return "0x…"
+}
+
+function addressError(address: string, chainKey: string): string {
+  if (chainKey === "btc") return "Invalid Bitcoin address"
+  if (chainKey === "trx") return "Invalid Tron address (must start with T)"
+  return "Invalid Ethereum address"
+}
 
 interface FeeEstimate {
   estimatedFee: string
   estimatedFeeUsd: string | null
   token: string
   network: string
+  requiresApproval: boolean
+}
+
+interface SuccessState {
+  txHash: string | null
+  amount: string
+  token: string
+  status: "completed" | "pending"
+  message?: string
 }
 
 export default function WithdrawPage() {
   const router = useRouter()
 
-  const [chainId, setChainId] = useState(1)
+  const [selectedKey, setSelectedKey] = useState("1")
   const [token, setToken] = useState("ETH")
   const [amount, setAmount] = useState("")
   const [toAddress, setToAddress] = useState("")
@@ -30,15 +59,18 @@ export default function WithdrawPage() {
   const [loadingFee, setLoadingFee] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<{ txHash: string; amount: string; token: string } | null>(null)
+  const [success, setSuccess] = useState<SuccessState | null>(null)
   const [confirmed, setConfirmed] = useState(false)
 
-  const chain = CHAINS.find((c) => c.id === chainId)!
+  const chain = CHAINS.find((c) => c.key === selectedKey)!
   const tokens = chain.tokens
 
   useEffect(() => {
     if (!tokens.includes(token)) setToken(tokens[0])
-  }, [chainId])
+    setFeeData(null)
+    setError(null)
+    setConfirmed(false)
+  }, [selectedKey])
 
   useEffect(() => {
     const init = async () => {
@@ -48,12 +80,17 @@ export default function WithdrawPage() {
     init()
   }, [router])
 
+
   useEffect(() => {
-    if (!amount || !toAddress || parseFloat(amount) <= 0) { setFeeData(null); return }
+    if (!chain.isEvm) { setFeeData(null); return }
+    if (!amount || !toAddress || parseFloat(amount) <= 0 || !validateAddress(toAddress, selectedKey)) {
+      setFeeData(null)
+      return
+    }
     const timer = setTimeout(async () => {
       setLoadingFee(true)
       try {
-        const params = new URLSearchParams({ chainId: String(chainId), token, amount, toAddress })
+        const params = new URLSearchParams({ chainId: String(chain.chainId), token, amount, toAddress })
         const res = await fetch(`/api/withdraw?${params}`)
         if (res.ok) setFeeData(await res.json())
         else setFeeData(null)
@@ -62,7 +99,7 @@ export default function WithdrawPage() {
       }
     }, 700)
     return () => clearTimeout(timer)
-  }, [chainId, token, amount, toAddress])
+  }, [selectedKey, token, amount, toAddress])
 
   const submit = async () => {
     if (!confirmed) { setError("Please confirm the withdrawal details."); return }
@@ -70,17 +107,30 @@ export default function WithdrawPage() {
     setError(null)
 
     try {
-      const res = await fetch("/api/withdraw", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chainId, tokenSymbol: token, amount, toAddress }),
-      })
+      let res: Response
+
+      if (chain.isEvm) {
+        res = await fetch("/api/withdraw", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainId: chain.chainId, tokenSymbol: token, amount, toAddress }),
+        })
+      } else {
+        res = await fetch("/api/withdraw/btc-trx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chain: selectedKey, tokenSymbol: token, amount, toAddress }),
+        })
+      }
+
       const data = await res.json()
 
       if (!res.ok) {
         setError(data.error ?? "Withdrawal failed")
+      } else if (data.status === "completed") {
+        setSuccess({ txHash: data.txHash, amount, token, status: "completed" })
       } else {
-        setSuccess({ txHash: data.txHash, amount, token })
+        setSuccess({ txHash: null, amount, token, status: "pending", message: data.message })
       }
     } catch {
       setError("Network error. Please try again.")
@@ -98,7 +148,8 @@ export default function WithdrawPage() {
     setConfirmed(false)
   }
 
-  const isValid = amount && toAddress && parseFloat(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(toAddress)
+  const addressValid = toAddress.length > 0 && validateAddress(toAddress, selectedKey)
+  const isValid = amount && toAddress && parseFloat(amount) > 0 && addressValid
 
   return (
     <div className="min-h-screen bg-[#0d0a07]">
@@ -116,15 +167,25 @@ export default function WithdrawPage() {
             <div className="bg-[#1a1410] border border-emerald-500/20 rounded-xl p-6 flex flex-col items-center gap-4 text-center">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl">✓</div>
               <div>
-                <div className="font-mono text-[16px] font-bold text-white">Withdrawal Sent</div>
-                <div className="font-mono text-[12px] text-[#7a6a5a] mt-1">
-                  {success.amount} {success.token} sent to your wallet
+                <div className="font-mono text-[16px] font-bold text-white">
+                  {success.status === "completed" ? "Withdrawal Sent" : "Withdrawal Submitted"}
+                </div>
+                <div className="font-mono text-[12px] text-[#7a6a5a] mt-1 max-w-xs mx-auto">
+                  {success.message ?? `${success.amount} ${success.token} sent to your wallet`}
                 </div>
               </div>
-              <div className="w-full bg-[#120d08] border border-[#2e2520] rounded-xl px-4 py-3 font-mono text-[11px]">
-                <div className="text-[#7a6a5a] mb-1">Transaction Hash</div>
-                <div className="text-white break-all">{success.txHash}</div>
-              </div>
+              {success.txHash && (
+                <div className="w-full bg-[#120d08] border border-[#2e2520] rounded-xl px-4 py-3 font-mono text-[11px]">
+                  <div className="text-[#7a6a5a] mb-1">Transaction Hash</div>
+                  <div className="text-white break-all">{success.txHash}</div>
+                </div>
+              )}
+              {success.status === "pending" && (
+                <div className="w-full bg-[#1e1208] border border-[#FF5733]/10 rounded-xl px-4 py-3 font-mono text-[11px] text-[#c8b8a8] text-left">
+                  <span className="text-[#FF5733]">→ </span>
+                  Your withdrawal is pending admin review. Funds will be sent to your address once approved, typically within 24 hours.
+                </div>
+              )}
               <div className="flex gap-2 w-full">
                 <button onClick={reset} className="flex-1 py-2.5 rounded-xl border border-[#2e2520] font-mono text-[12px] text-[#7a6a5a] hover:text-white hover:border-white/20 transition-all cursor-pointer">
                   New Withdrawal
@@ -140,17 +201,40 @@ export default function WithdrawPage() {
             <>
               <div className="flex flex-col gap-2">
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Network</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-2">
                   {CHAINS.map((c) => {
-                    const active = chainId === c.id
+                    const active = selectedKey === c.key
                     return (
                       <button
-                        key={c.id}
-                        onClick={() => { setChainId(c.id); setFeeData(null); setError(null) }}
-                        className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border font-mono text-[11px] transition-all cursor-pointer ${active ? "border-[#FF5733]/50 bg-[#FF5733]/5 text-white" : "border-[#2e2520] bg-[#1a1410] text-[#7a6a5a] hover:border-[#3a2520]"}`}
+                        key={c.key}
+                        onClick={() => { setSelectedKey(c.key); setToAddress(""); setAmount(""); setError(null) }}
+                        className={`flex items-center gap-4 px-5 py-4 rounded-xl border font-mono text-left transition-all cursor-pointer ${active ? "border-[#FF5733]/50 bg-[#FF5733]/5" : "border-[#2e2520] bg-[#1a1410] hover:border-[#3a2520]"}`}
                       >
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
-                        {c.name}
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: `${c.color}20`, border: `1px solid ${c.color}40` }}>
+                          <img
+                            src={c.logo}
+                            alt={c.name}
+                            width={28}
+                            height={28}
+                            className="rounded-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              target.style.display = "none"
+                              const fallback = target.nextElementSibling as HTMLElement | null
+                              if (fallback) fallback.style.display = "block"
+                            }}
+                          />
+                          <div className="w-4 h-4 rounded-full hidden" style={{ background: c.color }} />
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="text-white text-[14px] font-bold">{c.name}</div>
+                          <div className="text-[#7a6a5a] text-[10px] mt-0.5">Supports: {c.tokens.join(", ")}</div>
+                        </div>
+
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${active ? "bg-[#FF5733] border-[#FF5733]" : "bg-transparent border-[#3a2520]"}`}>
+                          {active && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
                       </button>
                     )
                   })}
@@ -187,17 +271,17 @@ export default function WithdrawPage() {
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Destination Address</label>
                 <input
                   type="text"
-                  placeholder="0x..."
+                  placeholder={addressPlaceholder(selectedKey)}
                   value={toAddress}
                   onChange={(e) => { setToAddress(e.target.value); setConfirmed(false) }}
                   className="w-full bg-[#1a1410] border border-[#2e2520] focus:border-[#FF5733]/40 outline-none rounded-xl px-4 py-3 font-mono text-[13px] text-white placeholder:text-[#4a3a2a] transition-colors"
                 />
-                {toAddress && !/^0x[0-9a-fA-F]{40}$/.test(toAddress) && (
-                  <span className="font-mono text-[10px] text-[#FF5733]">Invalid Ethereum address</span>
+                {toAddress && !addressValid && (
+                  <span className="font-mono text-[10px] text-[#FF5733]">{addressError(toAddress, selectedKey)}</span>
                 )}
               </div>
 
-              {(loadingFee || feeData) && (
+              {chain.isEvm && (loadingFee || feeData) && (
                 <div className="bg-[#120d08] border border-[#2e2520] rounded-xl overflow-hidden">
                   {loadingFee ? (
                     <div className="flex items-center gap-2 px-4 py-3 font-mono text-[11px] text-[#7a6a5a]">
@@ -214,6 +298,7 @@ export default function WithdrawPage() {
                         { label: "Network fee", value: `${feeData.estimatedFee} ${feeData.token}${feeData.estimatedFeeUsd ? ` (~$${parseFloat(feeData.estimatedFeeUsd).toFixed(2)})` : ""}` },
                         { label: "You receive", value: `≈ ${(parseFloat(amount) - parseFloat(feeData.estimatedFee)).toFixed(6)} ${token}` },
                         { label: "Network", value: feeData.network },
+                        ...(feeData.requiresApproval ? [{ label: "Approval", value: "Requires admin review" }] : []),
                       ].map((row, i, arr) => (
                         <div key={row.label} className={`flex justify-between px-4 py-2 font-mono text-[11px] ${i < arr.length - 1 ? "border-b border-[#2e2520]" : ""}`}>
                           <span className="text-[#7a6a5a]">{row.label}</span>
@@ -222,6 +307,21 @@ export default function WithdrawPage() {
                       ))}
                     </>
                   )}
+                </div>
+              )}
+
+              {!chain.isEvm && amount && parseFloat(amount) > 0 && addressValid && (
+                <div className="bg-[#120d08] border border-[#2e2520] rounded-xl overflow-hidden">
+                  {[
+                    { label: "Network", value: chain.name },
+                    { label: "Network fee", value: "Applied at execution" },
+                    { label: "Approval", value: "Requires admin review (≤ 24h)" },
+                  ].map((row, i, arr) => (
+                    <div key={row.label} className={`flex justify-between px-4 py-2 font-mono text-[11px] ${i < arr.length - 1 ? "border-b border-[#2e2520]" : ""}`}>
+                      <span className="text-[#7a6a5a]">{row.label}</span>
+                      <span className="text-white">{row.value}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -238,7 +338,7 @@ export default function WithdrawPage() {
                     )}
                   </div>
                   <span className="font-mono text-[11px] text-[#7a6a5a] leading-relaxed">
-                    I confirm I am sending <span className="text-white">{amount} {token}</span> to <span className="text-white font-bold">{toAddress.slice(0, 8)}…{toAddress.slice(-6)}</span>. This action is irreversible.
+                    I confirm I am sending <span className="text-white">{amount} {token}</span> to <span className="text-white font-bold">{toAddress.slice(0, 10)}…{toAddress.slice(-6)}</span> on <span className="text-white">{chain.name}</span>. This action is irreversible.
                   </span>
                 </label>
               )}
@@ -261,7 +361,7 @@ export default function WithdrawPage() {
                         <span key={i} className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                       ))}
                     </span>
-                    Broadcasting Transaction...
+                    Submitting...
                   </span>
                 ) : "Confirm Withdrawal →"}
               </button>

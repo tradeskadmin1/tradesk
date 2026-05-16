@@ -15,6 +15,7 @@ const mainNav = [
 ]
 
 const tradeNav = [
+    { label: "Spot",    path: "/dashboard/spot" },
     { label: "Futures", path: "/dashboard/futures" },
     { label: "History", path: "/dashboard/futures/history" },
 ]

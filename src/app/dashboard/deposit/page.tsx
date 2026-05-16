@@ -8,16 +8,18 @@ import Topbar from "../../components/topbar"
 import Sidebar from "../../components/sidebar"
 
 const CHAINS = [
-  { id: 1, name: "Ethereum", color: "#627eea", symbol: "ETH", tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
-  { id: 56, name: "BNB Chain", color: "#F0B90B", symbol: "BNB", tokens: ["BNB", "USDT", "USDC"] },
-  { id: 42161, name: "Arbitrum", color: "#28a0f0", symbol: "ARB", tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
-] as const
+  { key: "1",      id: 1,      name: "Ethereum", color: "#627eea", symbol: "ETH", logo: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",                          tokens: ["ETH", "USDC", "USDT", "WBTC", "LINK", "UNI", "AAVE"] },
+  { key: "56",     id: 56,     name: "BNB Chain", color: "#F0B90B", symbol: "BNB", logo: "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png",                    tokens: ["BNB", "USDT", "USDC"] },
+  { key: "42161",  id: 42161,  name: "Arbitrum", color: "#28a0f0", symbol: "ARB", logo: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg",     tokens: ["ETH", "USDC", "USDT", "WBTC", "ARB", "LINK", "UNI", "AAVE"] },
+  { key: "btc",    id: null,   name: "Bitcoin", color: "#F7931A", symbol: "BTC", logo: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",                             tokens: ["BTC"] },
+  { key: "trx",    id: null,   name: "Tron", color: "#FF0013", symbol: "TRX", logo: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",                           tokens: ["USDT (TRC-20)", "TRX"] },
+]
 
 export default function DepositPage() {
   const router = useRouter()
 
   const [kycStatus, setKycStatus] = useState<string | null>(null)
-  const [selectedChain, setSelectedChain] = useState<number>(1)
+  const [selectedChain, setSelectedChain] = useState<string>("1")
   const [address, setAddress] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -36,16 +38,19 @@ export default function DepositPage() {
       const status = (userData as any)?.kyc_status ?? "none"
       setKycStatus(status)
 
-      if (status === "approved") fetchAddress(selectedChain)
+      if (status === "approved") fetchAddress("1")
     }
     init()
   }, [router])
 
-  const fetchAddress = async (chainId: number) => {
+  const fetchAddress = async (chainKey: string) => {
     setLoading(true)
     setAddress(null)
     try {
-      const res = await fetch(`/api/deposit/address?chainId=${chainId}`)
+      const url = (chainKey === "btc" || chainKey === "trx")
+        ? `/api/deposit/address?chain=${chainKey}`
+        : `/api/deposit/address?chainId=${chainKey}`
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         setAddress(data.address)
@@ -55,11 +60,11 @@ export default function DepositPage() {
     }
   }
 
-  const handleChainSelect = (chainId: number) => {
-    setSelectedChain(chainId)
+  const handleChainSelect = (chainKey: string) => {
+    setSelectedChain(chainKey)
     setCopied(false)
     setShowQr(false)
-    fetchAddress(chainId)
+    fetchAddress(chainKey)
   }
 
   const copy = () => {
@@ -69,7 +74,7 @@ export default function DepositPage() {
     setTimeout(() => setCopied(false), 2500)
   }
 
-  const chain = CHAINS.find((c) => c.id === selectedChain)!
+  const chain = CHAINS.find((c) => c.key === selectedChain)!
 
   return (
     <div className="min-h-screen bg-[#0d0a07]">
@@ -115,15 +120,28 @@ export default function DepositPage() {
                 <label className="font-mono text-[11px] text-[#7a6a5a] uppercase tracking-wider">Select Network</label>
                 <div className="flex flex-col gap-2">
                   {CHAINS.map((c) => {
-                    const active = selectedChain === c.id
+                    const active = selectedChain === c.key
                     return (
                       <button
-                        key={c.id}
-                        onClick={() => handleChainSelect(c.id)}
+                        key={c.key}
+                        onClick={() => handleChainSelect(c.key)}
                         className={`flex items-center gap-4 px-5 py-4 rounded-xl border font-mono text-left transition-all cursor-pointer ${active ? "border-[#FF5733]/50 bg-[#FF5733]/5" : "border-[#2e2520] bg-[#1a1410] hover:border-[#3a2520]"}`}
                       >
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${c.color}20`, border: `1px solid ${c.color}40` }}>
-                          <div className="w-3 h-3 rounded-full" style={{ background: c.color }} />
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: `${c.color}20`, border: `1px solid ${c.color}40` }}>
+                          <img
+                            src={c.logo}
+                            alt={c.name}
+                            width={28}
+                            height={28}
+                            className="rounded-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              target.style.display = "none"
+                              const fallback = target.nextElementSibling as HTMLElement | null
+                              if (fallback) fallback.style.display = "block"
+                            }}
+                          />
+                          <div className="w-4 h-4 rounded-full hidden" style={{ background: c.color }} />
                         </div>
                         <div className="flex-1">
                           <div className="text-white text-[14px] font-bold">{c.name}</div>
@@ -222,10 +240,16 @@ export default function DepositPage() {
                 <div className="font-mono text-[11px] text-[#FF5733] uppercase tracking-widest">Important</div>
                 <div className="flex flex-col gap-2.5">
                   {[
-                    `Only send ${chain.tokens.join(", ")} tokens on ${chain.name}.`,
-                    "Sending the wrong token or using the wrong network will result in permanent loss.",
-                    "Deposits are credited after blockchain confirmation (usually 1–3 minutes).",
-                    "Minimum deposit is determined by gas fees on the network.",
+                    `Only send ${chain.tokens.join(", ")} to this address on ${chain.name}.`,
+                    "Sending any other token or using the wrong network will result in permanent loss.",
+                    chain.key === "btc"
+                      ? "BTC deposits are credited after 3 network confirmations (~30 minutes)."
+                      : chain.key === "trx"
+                        ? "TRX/TRC-20 deposits are credited after 20 confirmations (~1 minute)."
+                        : "Deposits are credited after blockchain confirmation (usually 1–3 minutes).",
+                    chain.key === "btc" || chain.key === "trx"
+                      ? "Minimum deposit is $10 equivalent."
+                      : "Minimum deposit is determined by gas fees on the network.",
                   ].map((msg, i) => (
                     <div key={i} className="flex items-start gap-2.5 font-mono text-[11px] text-[#c8b8a8]">
                       <span className="text-[#FF5733] shrink-0 mt-0.5">→</span>

@@ -34,3 +34,9 @@ body {
 *::-webkit-scrollbar {
     display: none;
 }
+
+
+a[href*="tradingview.com"],
+a[href*="TradingView"] {
+    display: none !important;
+}

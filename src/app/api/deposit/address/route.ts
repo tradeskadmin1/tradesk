@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getUserWalletAddress } from '@/lib/wallet'
 import { isSupportedChain } from '@/config/chains'
 import { checkRateLimit, LIMITS, rlResponse } from '@/lib/rate-limit'
+import { getOrCreateBtcWallet, getOrCreateTrxWallet } from '@/lib/wallet-btc-trx'
 
 
 export async function GET(req: Request) {
@@ -18,10 +19,24 @@ export async function GET(req: Request) {
         if (!rl.success) return rlResponse(rl.resetAt)
 
         const { searchParams } = new URL(req.url)
-        const chainIdParam = searchParams.get('chainId')
+        const chain = searchParams.get('chain')        // 'btc' | 'trx'
+        const chainIdParam = searchParams.get('chainId') // EVM numeric ID
 
+        // ── BTC ──────────────────────────────────────────────────────────────
+        if (chain === 'btc') {
+            const address = await getOrCreateBtcWallet(user.id)
+            return NextResponse.json({ chain: 'btc', address })
+        }
+
+        // ── TRX ──────────────────────────────────────────────────────────────
+        if (chain === 'trx') {
+            const address = await getOrCreateTrxWallet(user.id)
+            return NextResponse.json({ chain: 'trx', address })
+        }
+
+        // ── EVM chains ───────────────────────────────────────────────────────
         if (!chainIdParam) {
-            return NextResponse.json({ error: 'chainId is required' }, { status: 400 })
+            return NextResponse.json({ error: 'chainId or chain is required' }, { status: 400 })
         }
 
         const chainId = parseInt(chainIdParam, 10)
