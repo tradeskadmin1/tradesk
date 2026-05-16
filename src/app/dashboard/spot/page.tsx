@@ -16,7 +16,7 @@ const PAIR_GROUPS = [
   { label: "Major",    symbols: ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT", "DOGE/USDT"] },
   { label: "Layer 1",  symbols: ["AVAX/USDT", "NEAR/USDT", "ADA/USDT", "ATOM/USDT", "XLM/USDT", "SUI/USDT"] },
   { label: "DeFi",     symbols: ["LINK/USDT", "ARB/USDT", "UNI/USDT"] },
-  { label: "Meme",     symbols: ["PEPE/USDT", "SHIB/USDT"] },
+  { label: "Meme",     symbols: ["PEPE/USDT", "SHIB/USDT", "TRUMP/USDT", "PENGU/USDT", "BONK/USDT", "WIF/USDT", "FLOKI/USDT", "MOODENG/USDT", "POPCAT/USDT", "MEW/USDT", "NEIRO/USDT", "MEME/USDT", "TURBO/USDT", "DOGS/USDT"] },
   { label: "Legacy",   symbols: ["LTC/USDT", "BCH/USDT", "MATIC/USDT"] },
   { label: "Cross",    symbols: ["ETH/BTC"] },
 ]

@@ -21,7 +21,7 @@ export async function GET(req: Request) {
             id, status, amount, token_symbol, chain_id, to_address,
             tx_hash, fee, auto_approved, rejection_reason,
             created_at, approved_at, rejected_at, completed_at,
-            users!inner ( id, email, full_name )
+            users!withdrawals_user_id_public_fkey ( id, email, full_name )
         `)
         .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1)
